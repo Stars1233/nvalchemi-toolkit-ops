@@ -1,2 +1,2 @@
 # Requirements for neighborlist examples
-ase>=3.22.0
+pymatgen>=2025.10.7
