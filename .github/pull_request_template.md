@@ -35,8 +35,7 @@
 
 - [ ] Unit tests pass locally (`make pytest`)
 - [ ] Linting passes (`make lint`)
-- [ ] New tests added for new functionality
-- [ ] Tested on GPU
+- [ ] New tests added for new functionality meets coverage expectations?
 
 ## Checklist
 
@@ -45,9 +44,6 @@
 - [ ] I have performed a self-review of my code
 - [ ] I have added docstrings to new functions/classes
 - [ ] I have updated the documentation (if applicable)
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix/feature works
-- [ ] New and existing unit tests pass locally
 
 ## Additional Notes
 
