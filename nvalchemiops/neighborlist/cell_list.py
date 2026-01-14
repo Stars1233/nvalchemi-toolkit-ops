@@ -1327,6 +1327,11 @@ def cell_list(
     device = positions.device
     cell = cell if cell.ndim == 3 else cell.unsqueeze(0)
     pbc = pbc.squeeze(0)
+    if cell.det() <= 0.0:
+        raise RuntimeError(
+            "Provided cell volume is <= 0 and not supported."
+            " Please provide a unit cell with `det(cell) > 0.0`."
+        )
 
     if fill_value is None:
         fill_value = total_atoms

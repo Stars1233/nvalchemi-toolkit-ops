@@ -1355,6 +1355,12 @@ def batch_cell_list(
     """
     total_atoms = positions.shape[0]
     device = positions.device
+    volumes = cell.det()
+    if torch.any(volumes <= 0.0):
+        raise RuntimeError(
+            "Cells with volume <= 0 detected and are not supported."
+            " Please pass unit cells with `det(cell) > 0.0`."
+        )
 
     # Handle empty case
     if total_atoms <= 0 or cutoff <= 0:
