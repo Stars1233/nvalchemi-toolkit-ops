@@ -469,6 +469,18 @@ class TestEdgeCases:
             assert results[2].shape[2] == 3
             assert results[1].shape == (0,)
 
+    @pytest.mark.parametrize("device", devices)
+    @pytest.mark.parametrize("dtype", dtypes)
+    def test_zero_volume_cell(self, device, dtype):
+        """Tests that zero volume cells will raise a RuntimeError"""
+        positions = torch.randn(5, 3, dtype=dtype)
+        cell = torch.zeros((1, 3, 3), dtype=dtype, device=device)
+        pbc = torch.tensor([True, True, True], dtype=torch.bool)
+        cutoff = 1.5
+
+        with pytest.raises(RuntimeError, match="cell volume is <= 0"):
+            _ = cell_list(positions, cutoff, cell, pbc)
+
     @pytest.mark.parametrize("dtype", dtypes)
     @pytest.mark.parametrize("return_neighbor_list", [True, False])
     def test_dtype_consistency(self, dtype, return_neighbor_list):
