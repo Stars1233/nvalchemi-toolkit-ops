@@ -28,5 +28,4 @@ the new electrostatics interface.
 
 ## 0.1.0 - 2025-12-05
 
-_First release of the package_
-
+First release of the package
