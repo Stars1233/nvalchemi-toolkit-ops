@@ -51,7 +51,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CI_IMAGE: nvcr.io/nvidia/cuda:13.1.0-runtime-ubuntu24.04
   UV_CACHE_DIR: /tmp/uv-cache
   PRE_COMMIT_HOME: /tmp/pre-commit-cache
 
@@ -165,7 +164,7 @@ jobs:
       - changed-files
     runs-on: linux-amd64-gpu-h100-latest-1
     container:
-      image: nvcr.io/nvidia/pytorch:25.12-py3
+      image: nvcr.io/nvidia/cuda:13.1.0-runtime-ubuntu24.04
       options: --gpus all
     if: |
       (github.event_name == 'schedule') ||
