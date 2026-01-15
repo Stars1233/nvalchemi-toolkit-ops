@@ -27,8 +27,7 @@
 # 2. lint: Runs static code checks and linting via pre-commit
 # 3. get-pr-labels: Retrieves PR labels for conditional job execution
 # 4. test: Runs pytest unit tests with coverage (on GPU runner)
-# 5. coverage: Generates and uploads coverage reports
-# 6. verify-status: Verifies all jobs completed successfully
+# 5. verify-status: Verifies all jobs completed successfully
 
 name: "CI"
 
@@ -215,43 +214,6 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           make pytest
 
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-data
-          path: .coverage*
-          retention-days: 1
-
-  # ============================================================================
-  # COVERAGE STAGE
-  # ============================================================================
-  coverage:
-    needs: [test]
-    runs-on: ubuntu-latest
-    if: needs.test.result == 'success'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Setup UV
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-data
-
-      - name: Generate coverage report
-        run: |
-          uv sync --all-extras
-          make coverage
-
       - name: Upload coverage to Codecov
         if: github.event_name != 'merge_group' && github.event_name != 'schedule'
         uses: codecov/codecov-action@v5
@@ -275,7 +237,6 @@ jobs:
       - lint
       - get-pr-labels
       - test
-      - coverage
     runs-on: ubuntu-latest
     if: always()
     steps:
