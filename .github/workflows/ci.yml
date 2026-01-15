@@ -181,6 +181,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install apt requirements
+        env:
+          DEBIAN_FRONTEND: "noninteractive"
+          TZ: "Etc/UTC"
+        run: |
+          sudo apt-get update && \
+          sudo apt-get install -y curl \
+            git \
+            build-essential
+
       - name: Setup UV
         env:
           UV_VERSION: "0.9.25"
