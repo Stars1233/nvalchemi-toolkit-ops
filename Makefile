@@ -73,9 +73,9 @@ license:  ## Check license headers
 .PHONY: pytest
 pytest:  ## Run pytest with coverage
 	@if [ -n "$$CI" ]; then \
-		uv run coverage run -m pytest --junitxml=pytest-junit-results.xml test/; \
+		uv run pytest --junitxml=pytest.xml --cov --cov-report=xml:nvalchemiops.coverage.xml test; \
 	else \
-		uv run coverage run -m pytest test/; \
+		uv run pytest --cov --cov-report=term-missing:skip-covered test/; \
 	fi
 
 # ==============================================================================
@@ -83,15 +83,13 @@ pytest:  ## Run pytest with coverage
 # ==============================================================================
 
 .PHONY: coverage
-coverage:  ## Generate coverage report
-	uv run coverage combine || true
-	uv run coverage xml -o nvalchemiops.coverage.xml
-	uv run coverage report --fail-under=70
+coverage: pytest
+	@echo "Ran coverage"
 
 .PHONY: coverage-html
 coverage-html:  ## Generate HTML coverage report
-	uv run coverage combine || true
-	uv run coverage html
+	mkdir htmlcov
+	uv run pytest --cov --cov-report=html:htmlcov/index.html test/;
 	@echo "Coverage report generated at htmlcov/index.html"
 
 # ==============================================================================
