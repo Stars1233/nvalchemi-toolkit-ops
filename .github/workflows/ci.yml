@@ -198,7 +198,7 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv sync --all-extras
-          uv run pip install -r test/test-requires.txt
+          uv pip install -r test/test-requires.txt
 
       - name: Run tests with coverage
         run: |
