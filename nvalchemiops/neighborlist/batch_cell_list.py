@@ -692,6 +692,12 @@ def estimate_batch_cell_list_sizes(
     - For degenerate cells or empty systems, returns conservative fallback values
     - Memory usage scales as max_total_cells_across_batch * max_atoms_per_cell_any_system
     """
+    # check volumes only if tensor is not empty
+    if cell.numel() > 0 and torch.any(cell.det() <= 0.0):
+        raise RuntimeError(
+            "Cells with volume <= 0 detected and are not supported."
+            " Please pass unit cells with `det(cell) > 0.0`."
+        )
     num_systems = cell.shape[0]
 
     if num_systems == 0 or cutoff <= 0:
@@ -1355,12 +1361,6 @@ def batch_cell_list(
     """
     total_atoms = positions.shape[0]
     device = positions.device
-    volumes = cell.det()
-    if torch.any(volumes <= 0.0):
-        raise RuntimeError(
-            "Cells with volume <= 0 detected and are not supported."
-            " Please pass unit cells with `det(cell) > 0.0`."
-        )
 
     # Handle empty case
     if total_atoms <= 0 or cutoff <= 0:
