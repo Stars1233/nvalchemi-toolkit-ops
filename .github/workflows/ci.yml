@@ -51,7 +51,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CI_IMAGE: nvcr.io/nvidia/pytorch:25.12-py3
+  CI_IMAGE: nvcr.io/nvidia/cuda:13.1.0-runtime-ubuntu24.04
   UV_CACHE_DIR: /tmp/uv-cache
   PRE_COMMIT_HOME: /tmp/pre-commit-cache
 
