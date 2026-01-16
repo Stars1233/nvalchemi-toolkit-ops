@@ -9,7 +9,7 @@ authors = [
 ]
 description = "High-performance NVIDIA Warp primitives for GPU-enabled computational chemistry and atomistic simulation workflows."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 dependencies = [
     "warp-lang >= 1.10.0",
@@ -58,6 +58,7 @@ dev = [
     "pytest-asyncio>=0.25.3",
     "pytest-dependency>=0.6.0",
     "coverage>=7.2.0",
+    "pytest-cov>=7.0.0",
     {include-group="docs"},
 ]
 docs = [
@@ -105,7 +106,7 @@ ignore = ["E501", "S311"]
 [tool.pytest.ini_options]
 testpaths = ["test"]
 norecursedirs = [".git", "third_party"]
-addopts = ["-vv", "-r", "xfXs"]
+addopts = ["-vv", "-r", "xfXs", "--cov", "--cov-fail-under=70"]
 markers = [
     "slow: marks tests as slow (deselect with: -m 'not slow')",
     "gpu: marks tests that require GPU",

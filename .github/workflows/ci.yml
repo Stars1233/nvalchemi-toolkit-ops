@@ -27,8 +27,7 @@
 # 2. lint: Runs static code checks and linting via pre-commit
 # 3. get-pr-labels: Retrieves PR labels for conditional job execution
 # 4. test: Runs pytest unit tests with coverage (on GPU runner)
-# 5. coverage: Generates and uploads coverage reports
-# 6. verify-status: Verifies all jobs completed successfully
+# 5. verify-status: Verifies all jobs completed successfully
 
 name: "CI"
 
@@ -40,7 +39,7 @@ on:
   merge_group:
     types: [checks_requested]
   schedule:
-    - cron: "0 7 * * *"  # Runs at 7 AM UTC daily
+    - cron: "0 7 * * *" # Runs at 7 AM UTC daily
 
 defaults:
   run:
@@ -51,7 +50,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CI_IMAGE: nvcr.io/nvidia/pytorch:25.12-py3
   UV_CACHE_DIR: /tmp/uv-cache
   PRE_COMMIT_HOME: /tmp/pre-commit-cache
 
@@ -163,9 +161,10 @@ jobs:
       - lint
       - get-pr-labels
       - changed-files
-    runs-on: nv-gpu-amd64-h100-1gpu
+    runs-on: linux-amd64-gpu-h100-latest-1
+    timeout-minutes: 30
     container:
-      image: nvcr.io/nvidia/pytorch:25.12-py3
+      image: nvcr.io/nvidia/cuda:13.1.0-runtime-ubuntu24.04
       options: --gpus all
     if: |
       (github.event_name == 'schedule') ||
@@ -181,6 +180,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install apt requirements
+        env:
+          DEBIAN_FRONTEND: "noninteractive"
+          TZ: "Etc/UTC"
+        run: |
+          apt-get update && \
+          apt-get install -y curl \
+            git \
+            build-essential
 
       - name: Setup UV
         env:
@@ -198,49 +207,12 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv sync --all-extras
-          uv run pip install -r test/test-requires.txt
+          uv pip install -r test/test-requires.txt
 
       - name: Run tests with coverage
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           make pytest
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-data
-          path: .coverage*
-          retention-days: 1
-
-  # ============================================================================
-  # COVERAGE STAGE
-  # ============================================================================
-  coverage:
-    needs: [test]
-    runs-on: ubuntu-latest
-    if: needs.test.result == 'success'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Setup UV
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-data
-
-      - name: Generate coverage report
-        run: |
-          uv sync --all-extras
-          make coverage
 
       - name: Upload coverage to Codecov
         if: github.event_name != 'merge_group' && github.event_name != 'schedule'
@@ -265,7 +237,6 @@ jobs:
       - lint
       - get-pr-labels
       - test
-      - coverage
     runs-on: ubuntu-latest
     if: always()
     steps:

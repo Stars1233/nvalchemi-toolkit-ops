@@ -679,6 +679,12 @@ def estimate_cell_list_sizes(
     cells contain all potential neighbors. The estimation assumes roughly
     cubic cells and uniform atomic distribution.
     """
+    # check cell volume only if not empty
+    if cell.numel() > 0 and cell.det() <= 0.0:
+        raise RuntimeError(
+            "Provided cell volume is <= 0 and not supported."
+            " Please provide a unit cell with `det(cell) > 0.0`."
+        )
     dtype = cell.dtype
     device = cell.device
     wp_device = str(device)
