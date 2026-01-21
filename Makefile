@@ -102,7 +102,7 @@ docs-install-examples:  ## Install example dependencies
 	@for req in examples/*/*-requires.txt; do \
 		if [ -f "$$req" ]; then \
 			echo "Installing dependencies from $$req"; \
-			uv run pip install -r "$$req"; \
+			uv pip install -r "$$req"; \
 		fi; \
 	done
 
@@ -111,7 +111,7 @@ docs-install-benchmarks:  ## Install benchmark dependencies
 	@echo "Installing benchmark dependencies..."
 	@if [ -f "benchmarks/benchmark-requires.txt" ]; then \
 		echo "Installing dependencies from benchmarks/benchmark-requires.txt"; \
-		uv run pip install -r "benchmarks/benchmark-requires.txt"; \
+		uv pip install -r "benchmarks/benchmark-requires.txt"; \
 	fi
 
 .PHONY: docs

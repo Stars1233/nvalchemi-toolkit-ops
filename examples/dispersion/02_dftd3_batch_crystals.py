@@ -67,13 +67,9 @@ from utils import (
     save_dftd3_parameters,
 )
 
-from nvalchemiops.interactions.dispersion.dftd3 import (
-    dftd3,
-)
-from nvalchemiops.neighborlist import (
-    estimate_max_neighbors,
-    neighbor_list,
-)
+from nvalchemiops.neighbors import estimate_max_neighbors
+from nvalchemiops.torch.interactions.dispersion import dftd3
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Configuration
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

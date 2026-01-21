@@ -41,8 +41,8 @@ import numpy as np
 import torch
 from pymatgen.core import Structure
 
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.dispersion import dftd3
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # ==============================================================================
 # Functional Parameters

@@ -19,13 +19,17 @@ import pytest
 import torch
 import warp as wp
 
-from nvalchemiops.neighborlist.cell_list import (
+from nvalchemiops.neighbors.cell_list import (
     _cell_list_bin_atoms_overload,
     _cell_list_build_neighbor_matrix_overload,
     _cell_list_compute_cell_offsets,
     _cell_list_construct_bin_size_overload,
     _cell_list_count_atoms_per_bin_overload,
-    allocate_cell_list,
+    wp_build_cell_list,
+    wp_query_cell_list,
+)
+from nvalchemiops.torch.neighbors.neighbor_utils import allocate_cell_list
+from nvalchemiops.torch.neighbors.unbatched import (
     build_cell_list,
     estimate_cell_list_sizes,
 )
@@ -33,17 +37,13 @@ from nvalchemiops.types import get_wp_dtype, get_wp_mat_dtype, get_wp_vec_dtype
 
 from .test_utils import create_random_system, create_simple_cubic_system
 
-devices = ["cpu"]
-if torch.cuda.is_available():
-    devices.append("cuda:0")
 dtypes = [torch.float32, torch.float64]
 
 
+@pytest.mark.parametrize("dtype", dtypes)
 class TestCellListKernels:
     """Test individual cell list kernel functions."""
 
-    @pytest.mark.parametrize("device", devices)
-    @pytest.mark.parametrize("dtype", dtypes)
     def test_construct_bin_size(self, device, dtype):
         """Test _cell_list_construct_bin_size kernel."""
         # Create test system
@@ -88,8 +88,6 @@ class TestCellListKernels:
             f"Total cells {total_cells} exceeds max_nbins {max_nbins}"
         )
 
-    @pytest.mark.parametrize("device", devices)
-    @pytest.mark.parametrize("dtype", dtypes)
     def test_count_atoms_per_bin(self, device, dtype):
         """Test _cell_list_count_atoms_per_bin kernel."""
         positions, cell, pbc = create_simple_cubic_system(
@@ -148,8 +146,7 @@ class TestCellListKernels:
             "All cell atom counts should be non-negative"
         )
 
-    @pytest.mark.parametrize("device", devices)
-    def test_compute_cell_offsets(self, device):
+    def test_compute_cell_offsets(self, device, dtype):
         """Test _cell_list_compute_cell_offsets kernel."""
         wp_device = str(device)
 
@@ -178,8 +175,6 @@ class TestCellListKernels:
         expected = torch.tensor([0, 3, 3, 5, 6], dtype=torch.int32, device=device)
         torch.testing.assert_close(cell_offsets, expected)
 
-    @pytest.mark.parametrize("device", devices)
-    @pytest.mark.parametrize("dtype", dtypes)
     def test_bin_atoms(self, device, dtype):
         """Test _cell_list_bin_atoms kernel."""
         positions, cell, pbc = create_simple_cubic_system(
@@ -285,8 +280,6 @@ class TestCellListKernels:
             "All atom indices should be valid"
         )
 
-    @pytest.mark.parametrize("device", devices)
-    @pytest.mark.parametrize("dtype", dtypes)
     def test_build_neighbor_matrix(self, device, dtype):
         """Test _cell_list_build_neighbor_matrix kernel."""
         # Simple two-atom system
@@ -429,3 +422,186 @@ class TestCellListKernels:
                     assert dist < cutoff + 1e-5, (
                         f"Distance {dist} should be within cutoff {cutoff}"
                     )
+
+
+@pytest.mark.parametrize("dtype", dtypes)
+class TestCellListWpLaunchers:
+    """Test the public wp_* launcher API for cell lists."""
+
+    def test_wp_build_cell_list(self, device, dtype):
+        """Test wp_build_cell_list launcher."""
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=8, cell_size=2.0, dtype=dtype, device=device
+        )
+        pbc = pbc.squeeze(0)
+        cutoff = 1.1
+
+        # Get size estimates
+        max_cells, neighbor_search_radius = estimate_cell_list_sizes(cell, pbc, cutoff)
+
+        # Allocate cell list
+        (
+            cells_per_dimension,
+            _,  # neighbor_search_radius not needed for wp launcher
+            atom_periodic_shifts,
+            atom_to_cell_mapping,
+            atoms_per_cell_count,
+            cell_atom_start_indices,
+            cell_atom_list,
+        ) = allocate_cell_list(
+            positions.shape[0], max_cells, neighbor_search_radius, device
+        )
+
+        # Convert to warp arrays
+        wp_dtype = get_wp_dtype(dtype)
+        wp_vec_dtype = get_wp_vec_dtype(dtype)
+        wp_mat_dtype = get_wp_mat_dtype(dtype)
+
+        wp_positions = wp.from_torch(positions, dtype=wp_vec_dtype)
+        wp_cell = wp.from_torch(cell, dtype=wp_mat_dtype)
+        wp_pbc = wp.from_torch(pbc, dtype=wp.bool, return_ctype=True)
+        wp_cells_per_dimension = wp.from_torch(
+            cells_per_dimension, dtype=wp.int32, return_ctype=True
+        )
+        wp_atom_periodic_shifts = wp.from_torch(
+            atom_periodic_shifts, dtype=wp.vec3i, return_ctype=True
+        )
+        wp_atom_to_cell_mapping = wp.from_torch(
+            atom_to_cell_mapping, dtype=wp.vec3i, return_ctype=True
+        )
+        wp_atoms_per_cell_count = wp.from_torch(atoms_per_cell_count, dtype=wp.int32)
+        wp_cell_atom_start_indices = wp.from_torch(
+            cell_atom_start_indices, dtype=wp.int32
+        )
+        wp_cell_atom_list = wp.from_torch(
+            cell_atom_list, dtype=wp.int32, return_ctype=True
+        )
+
+        # Call wp_build_cell_list launcher
+        wp_build_cell_list(
+            wp_positions,
+            wp_cell,
+            wp_pbc,
+            cutoff,
+            wp_cells_per_dimension,
+            wp_atom_periodic_shifts,
+            wp_atom_to_cell_mapping,
+            wp_atoms_per_cell_count,
+            wp_cell_atom_start_indices,
+            wp_cell_atom_list,
+            wp_dtype,
+            str(device),
+        )
+
+        # Verify results
+        assert torch.all(cells_per_dimension > 0), "Cell dimensions should be positive"
+        total_binned = atoms_per_cell_count.sum().item()
+        assert total_binned == positions.shape[0], (
+            f"Expected {positions.shape[0]} atoms binned, got {total_binned}"
+        )
+
+    def test_wp_query_cell_list(self, device, dtype):
+        """Test wp_query_cell_list launcher."""
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=8, cell_size=2.0, dtype=dtype, device=device
+        )
+        pbc = pbc.squeeze(0)
+        cutoff = 1.1
+
+        # Build cell list first using warp launcher directly
+        max_cells, neighbor_search_radius = estimate_cell_list_sizes(cell, pbc, cutoff)
+        cell_list_cache = allocate_cell_list(
+            positions.shape[0], max_cells, neighbor_search_radius, device
+        )
+
+        # Convert to warp and call wp_build_cell_list
+        wp_dtype = get_wp_dtype(dtype)
+        wp_vec_dtype = get_wp_vec_dtype(dtype)
+        wp_mat_dtype = get_wp_mat_dtype(dtype)
+
+        wp_positions = wp.from_torch(positions, dtype=wp_vec_dtype, return_ctype=True)
+        wp_cell = wp.from_torch(cell, dtype=wp_mat_dtype, return_ctype=True)
+        wp_pbc = wp.from_torch(pbc, dtype=wp.bool, return_ctype=True)
+        wp_cells_per_dimension = wp.from_torch(
+            cell_list_cache[0], dtype=wp.int32, return_ctype=True
+        )
+        wp_atom_periodic_shifts = wp.from_torch(
+            cell_list_cache[2], dtype=wp.vec3i, return_ctype=True
+        )
+        wp_atom_to_cell_mapping = wp.from_torch(
+            cell_list_cache[3], dtype=wp.vec3i, return_ctype=True
+        )
+        wp_atoms_per_cell_count = wp.from_torch(cell_list_cache[4], dtype=wp.int32)
+        wp_cell_atom_start_indices = wp.from_torch(cell_list_cache[5], dtype=wp.int32)
+        wp_cell_atom_list = wp.from_torch(
+            cell_list_cache[6], dtype=wp.int32, return_ctype=True
+        )
+
+        wp_build_cell_list(
+            wp_positions,
+            wp_cell,
+            wp_pbc,
+            cutoff,
+            wp_cells_per_dimension,
+            wp_atom_periodic_shifts,
+            wp_atom_to_cell_mapping,
+            wp_atoms_per_cell_count,
+            wp_cell_atom_start_indices,
+            wp_cell_atom_list,
+            wp_dtype,
+            str(device),
+        )
+
+        # Prepare neighbor matrix
+        max_neighbors = 10
+        neighbor_matrix = torch.full(
+            (positions.shape[0], max_neighbors),
+            -1,
+            dtype=torch.int32,
+            device=device,
+        )
+        neighbor_matrix_shifts = torch.zeros(
+            (positions.shape[0], max_neighbors, 3), dtype=torch.int32, device=device
+        )
+        num_neighbors = torch.zeros(
+            (positions.shape[0],), dtype=torch.int32, device=device
+        )
+
+        # Re-convert to warp arrays (already converted above for build)
+        wp_neighbor_search_radius = wp.from_torch(
+            cell_list_cache[1], dtype=wp.int32, return_ctype=True
+        )
+        wp_neighbor_matrix = wp.from_torch(
+            neighbor_matrix, dtype=wp.int32, return_ctype=True
+        )
+        wp_neighbor_matrix_shifts = wp.from_torch(
+            neighbor_matrix_shifts, dtype=wp.vec3i, return_ctype=True
+        )
+        wp_num_neighbors = wp.from_torch(
+            num_neighbors, dtype=wp.int32, return_ctype=True
+        )
+
+        # Call wp_query_cell_list launcher
+        wp_query_cell_list(
+            wp_positions,
+            wp_cell,
+            wp_pbc,
+            cutoff,
+            wp_cells_per_dimension,
+            wp_neighbor_search_radius,
+            wp_atom_periodic_shifts,
+            wp_atom_to_cell_mapping,
+            wp_atoms_per_cell_count,
+            wp_cell_atom_start_indices,
+            wp_cell_atom_list,
+            wp_neighbor_matrix,
+            wp_neighbor_matrix_shifts,
+            wp_num_neighbors,
+            wp_dtype,
+            str(device),
+            True,
+        )
+
+        # Verify we found some neighbors
+        assert torch.all(num_neighbors >= 0), "Neighbor counts should be non-negative"
+        assert num_neighbors.sum() > 0, "Should find some neighbors"

@@ -145,7 +145,6 @@ d3_energies, d3_forces, coord_nums, d3_virials = dftd3(
 This example shows how to compute the per-atom and system energies
 as well as the forces using the particle mesh Ewald interface.
 
-
 ```python
 import torch
 from nvalchemiops.interactions.electrostatics import particle_mesh_ewald

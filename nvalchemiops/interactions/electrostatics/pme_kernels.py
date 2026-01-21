@@ -1,12 +1,17 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """
 Unified PME Kernels
@@ -64,6 +69,21 @@ Green's Function Kernels:
 Energy Correction Kernels:
     _pme_energy_corrections_kernel: Single-system self + background correction
     _batch_pme_energy_corrections_kernel: Batched version
+
+.. warning
+    In contrast to the other electrostatic kernels that offer end-to-end
+    ``warp`` launchers, PME requires FFT for the convolution step that is
+    currently not available in ``warp``. As a result, bindings must call
+    FFT within their own framework in between kernel launches. The sequence
+    of calls looks like the following:
+
+    1. Spread charges to mesh: ``wp_spline_spread()``
+    2. Forward FFT: ``framework.fft.rfftn(mesh)``
+    3. Compute Green's function: ``wp_pme_green_structure_factor()``
+    4. Convolution: ``mesh_fft * green_function / structure_factor_sq``
+    5. Inverse FFT: ``framework.fft.irfftn(...)``
+    6. Gather potential: ``wp_spline_gather()``
+    7. Apply corrections: ``wp_pme_energy_corrections()``
 
 REFERENCES
 ==========
@@ -136,7 +156,7 @@ def _pme_green_structure_factor_kernel(
 
     Computes two arrays needed for PME reciprocal space:
     1. Green's function: G(k) = (2π/V) * exp(-k²/(4α²)) / k²
-    2. Structure factor squared: |B(k)|² for B-spline dealiasing
+    2. Structure factor squared: :math:`|B(k)|^2` for B-spline dealiasing
 
     The structure factor correction accounts for aliasing from B-spline
     charge spreading: C(k) = [sinc(h/N_x) * sinc(k/N_y) * sinc(l/N_z)]^(2p)
@@ -168,7 +188,7 @@ def _pme_green_structure_factor_kernel(
     green_function : wp.array3d, shape (Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
         OUTPUT: Green's function G(k) at each grid point.
     structure_factor_sq : wp.array3d, shape (Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
-        OUTPUT: |B(k)|² structure factor squared at each grid point.
+        OUTPUT: :math:`|B(k)|^2` structure factor squared at each grid point.
 
     Notes
     -----
@@ -246,7 +266,7 @@ def _batch_pme_green_structure_factor_kernel(
     different alpha and volume values, but shares the same mesh dimensions.
 
     Green's function: G_s(k) = (2π/V_s) * exp(-k²/(4α_s²)) / k²
-    Structure factor: |B(k)|² (computed once, shared across systems)
+    Structure factor: :math:`|B(k)|^2` (computed once, shared across systems)
 
     Launch Grid
     -----------
@@ -275,7 +295,7 @@ def _batch_pme_green_structure_factor_kernel(
     green_function : wp.array4d, shape (B, Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
         OUTPUT: Per-system Green's function G_s(k) at each grid point.
     structure_factor_sq : wp.array3d, shape (Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
-        OUTPUT: |B(k)|² structure factor squared (computed only at batch_idx=0).
+        OUTPUT: :math:`|B(k)|^2` structure factor squared (computed only at batch_idx=0).
 
     Notes
     -----
@@ -765,3 +785,402 @@ for t in _T:
             wp.array(dtype=t),  # charge_gradients
         ],
     )
+
+
+###########################################################################################
+########################### Warp Launcher Functions (wp_*) ################################
+###########################################################################################
+
+
+def wp_pme_green_structure_factor(
+    k_squared: wp.array,
+    miller_x: wp.array,
+    miller_y: wp.array,
+    miller_z: wp.array,
+    alpha: wp.array,
+    volume: wp.array,
+    mesh_nx: int,
+    mesh_ny: int,
+    mesh_nz: int,
+    spline_order: int,
+    green_function: wp.array,
+    structure_factor_sq: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Compute PME Green's function and B-spline structure factor correction.
+
+    Framework-agnostic launcher for single-system Green's function computation.
+
+    Note: FFT Operations Offloaded to Framework
+    -------------------------------------------
+    This kernel computes the Green's function multipliers for PME.
+    The complete PME reciprocal-space workflow requires FFT operations
+    that are not available in Warp and must be performed by the calling
+    framework. The typical workflow is:
+
+    1. Spread charges to mesh: wp_spline_spread()
+    2. Forward FFT: framework.fft.rfftn(mesh)      <-- Framework-specific
+    3. Compute Green's function: wp_pme_green_structure_factor()
+    4. Convolution: mesh_fft * green_function / structure_factor_sq
+    5. Inverse FFT: framework.fft.irfftn(...)     <-- Framework-specific
+    6. Gather potential: wp_spline_gather()
+    7. Apply corrections: wp_pme_energy_corrections()
+
+    Parameters
+    ----------
+    k_squared : wp.array, shape (Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
+        Squared magnitude of k-vectors at each grid point.
+    miller_x : wp.array, shape (Nx,), dtype=wp.float32 or wp.float64
+        Miller indices in x direction (from fftfreq).
+    miller_y : wp.array, shape (Ny,), dtype=wp.float32 or wp.float64
+        Miller indices in y direction (from fftfreq).
+    miller_z : wp.array, shape (Nz_rfft,), dtype=wp.float32 or wp.float64
+        Miller indices in z direction (from rfftfreq).
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    volume : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Unit cell volume.
+    mesh_nx, mesh_ny, mesh_nz : int
+        Full mesh dimensions (Nz is the full size, not rfft size).
+    spline_order : int
+        B-spline order (1-4). Order 4 (cubic) recommended.
+    green_function : wp.array, shape (Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
+        OUTPUT: Green's function G(k) at each grid point.
+    structure_factor_sq : wp.array, shape (Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
+        OUTPUT: :math:`|B(k)|^2` structure factor squared at each grid point.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64).
+    device : str | None
+        Warp device string. If None, inferred from arrays.
+
+    See Also
+    --------
+    nvalchemiops.torch.interactions.electrostatics.pme : Complete PyTorch implementation
+    """
+    nx, ny, nz_rfft = k_squared.shape[0], k_squared.shape[1], k_squared.shape[2]
+
+    kernel = _pme_green_structure_factor_kernel_overload[wp_dtype]
+    wp.launch(
+        kernel,
+        dim=(nx, ny, nz_rfft),
+        inputs=[
+            k_squared,
+            miller_x,
+            miller_y,
+            miller_z,
+            alpha,
+            volume,
+            wp.int32(mesh_nx),
+            wp.int32(mesh_ny),
+            wp.int32(mesh_nz),
+            wp.int32(spline_order),
+        ],
+        outputs=[green_function, structure_factor_sq],
+        device=device,
+    )
+
+
+def wp_batch_pme_green_structure_factor(
+    k_squared: wp.array,
+    miller_x: wp.array,
+    miller_y: wp.array,
+    miller_z: wp.array,
+    alpha: wp.array,
+    volumes: wp.array,
+    mesh_nx: int,
+    mesh_ny: int,
+    mesh_nz: int,
+    spline_order: int,
+    green_function: wp.array,
+    structure_factor_sq: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Compute PME Green's function and B-spline structure factor for batched systems.
+
+    Framework-agnostic launcher for batched Green's function computation.
+    Each system can have different alpha and volume values, but shares
+    the same mesh dimensions.
+
+    Parameters
+    ----------
+    k_squared : wp.array, shape (B, Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
+        Per-system squared magnitude of k-vectors at each grid point.
+    miller_x : wp.array, shape (Nx,), dtype=wp.float32 or wp.float64
+        Miller indices in x direction (shared across systems).
+    miller_y : wp.array, shape (Ny,), dtype=wp.float32 or wp.float64
+        Miller indices in y direction (shared across systems).
+    miller_z : wp.array, shape (Nz_rfft,), dtype=wp.float32 or wp.float64
+        Miller indices in z direction (shared across systems).
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    volumes : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system unit cell volume.
+    mesh_nx, mesh_ny, mesh_nz : int
+        Full mesh dimensions (Nz is the full size, not rfft size).
+    spline_order : int
+        B-spline order (1-4). Order 4 (cubic) recommended.
+    green_function : wp.array, shape (B, Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
+        OUTPUT: Per-system Green's function G_s(k) at each grid point.
+    structure_factor_sq : wp.array, shape (Nx, Ny, Nz_rfft), dtype=wp.float32 or wp.float64
+        OUTPUT: :math:`|B(k)|^2` structure factor squared (computed only at batch_idx=0).
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64).
+    device : str | None
+        Warp device string. If None, inferred from arrays.
+
+    See Also
+    --------
+    nvalchemiops.torch.interactions.electrostatics.pme : Complete PyTorch implementation
+    """
+    num_systems = k_squared.shape[0]
+    nx, ny, nz_rfft = k_squared.shape[1], k_squared.shape[2], k_squared.shape[3]
+
+    kernel = _batch_pme_green_structure_factor_kernel_overload[wp_dtype]
+    wp.launch(
+        kernel,
+        dim=(num_systems, nx, ny, nz_rfft),
+        inputs=[
+            k_squared,
+            miller_x,
+            miller_y,
+            miller_z,
+            alpha,
+            volumes,
+            wp.int32(mesh_nx),
+            wp.int32(mesh_ny),
+            wp.int32(mesh_nz),
+            wp.int32(spline_order),
+        ],
+        outputs=[green_function, structure_factor_sq],
+        device=device,
+    )
+
+
+def wp_pme_energy_corrections(
+    raw_energies: wp.array,
+    charges: wp.array,
+    volume: wp.array,
+    alpha: wp.array,
+    total_charge: wp.array,
+    corrected_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Apply self-energy and background corrections to PME energies.
+
+    Framework-agnostic launcher for single-system energy corrections.
+
+    Converts raw potential values (φ_i) to corrected per-atom energies by:
+    1. Multiplying potential by charge: E_pot = q_i * φ_i
+    2. Subtracting self-energy: E_self = (α/√π) * q_i²
+    3. Subtracting background: E_bg = (π/(2α²V)) * q_i * Q_total
+
+    Final: E_i = q_i * φ_i - (α/√π) * q_i² - (π/(2α²V)) * q_i * Q_total
+
+    Parameters
+    ----------
+    raw_energies : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Raw potential values φ_i from mesh interpolation.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    volume : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Unit cell volume.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    total_charge : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Sum of all charges (Q_total = ∑_i q_i).
+    corrected_energies : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        OUTPUT: Corrected per-atom energies.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64).
+    device : str | None
+        Warp device string. If None, inferred from arrays.
+    """
+    num_atoms = raw_energies.shape[0]
+
+    kernel = _pme_energy_corrections_kernel_overload[wp_dtype]
+    wp.launch(
+        kernel,
+        dim=num_atoms,
+        inputs=[raw_energies, charges, volume, alpha, total_charge],
+        outputs=[corrected_energies],
+        device=device,
+    )
+
+
+def wp_batch_pme_energy_corrections(
+    raw_energies: wp.array,
+    charges: wp.array,
+    batch_idx: wp.array,
+    volumes: wp.array,
+    alpha: wp.array,
+    total_charges: wp.array,
+    corrected_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Apply self-energy and background corrections for batched PME.
+
+    Framework-agnostic launcher for batched energy corrections.
+    Each atom looks up its system's parameters via batch_idx.
+
+    Parameters
+    ----------
+    raw_energies : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Raw potential values φ_i from mesh interpolation.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges for all systems concatenated.
+    batch_idx : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom (0 to B-1).
+    volumes : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system unit cell volume.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    total_charges : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system sum of charges (Q_s = ∑_{i∈s} q_i).
+    corrected_energies : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        OUTPUT: Corrected per-atom energies.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64).
+    device : str | None
+        Warp device string. If None, inferred from arrays.
+    """
+    num_atoms = raw_energies.shape[0]
+
+    kernel = _batch_pme_energy_corrections_kernel_overload[wp_dtype]
+    wp.launch(
+        kernel,
+        dim=num_atoms,
+        inputs=[raw_energies, charges, batch_idx, volumes, alpha, total_charges],
+        outputs=[corrected_energies],
+        device=device,
+    )
+
+
+def wp_pme_energy_corrections_with_charge_grad(
+    raw_energies: wp.array,
+    charges: wp.array,
+    volume: wp.array,
+    alpha: wp.array,
+    total_charge: wp.array,
+    corrected_energies: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Apply corrections and compute charge gradients for PME energies.
+
+    Framework-agnostic launcher for single-system energy corrections
+    with analytical charge gradient computation.
+
+    Computes both corrected energies and analytical charge gradients:
+    - Energy: E_i = q_i * φ_i - (α/√π) * q_i² - (π/(2α²V)) * q_i * Q_total
+    - Charge gradient: ∂E_total/∂q_i = 2*φ_i - 2*(α/√π)*q_i - (π/(α²V))*Q_total
+
+    Parameters
+    ----------
+    raw_energies : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Raw potential values φ_i from mesh interpolation.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    volume : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Unit cell volume.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    total_charge : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Sum of all charges (Q_total = ∑_i q_i).
+    corrected_energies : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        OUTPUT: Corrected per-atom energies.
+    charge_gradients : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        OUTPUT: Analytical charge gradients ∂E_total/∂q_i.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64).
+    device : str | None
+        Warp device string. If None, inferred from arrays.
+    """
+    num_atoms = raw_energies.shape[0]
+
+    kernel = _pme_energy_corrections_with_charge_grad_kernel_overload[wp_dtype]
+    wp.launch(
+        kernel,
+        dim=num_atoms,
+        inputs=[raw_energies, charges, volume, alpha, total_charge],
+        outputs=[corrected_energies, charge_gradients],
+        device=device,
+    )
+
+
+def wp_batch_pme_energy_corrections_with_charge_grad(
+    raw_energies: wp.array,
+    charges: wp.array,
+    batch_idx: wp.array,
+    volumes: wp.array,
+    alpha: wp.array,
+    total_charges: wp.array,
+    corrected_energies: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Apply corrections and compute charge gradients for batched PME.
+
+    Framework-agnostic launcher for batched energy corrections
+    with analytical charge gradient computation.
+
+    Parameters
+    ----------
+    raw_energies : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Raw potential values φ_i from mesh interpolation.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges for all systems concatenated.
+    batch_idx : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom (0 to B-1).
+    volumes : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system unit cell volume.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    total_charges : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system sum of charges (Q_s = ∑_{i∈s} q_i).
+    corrected_energies : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        OUTPUT: Corrected per-atom energies.
+    charge_gradients : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        OUTPUT: Analytical charge gradients ∂E_total/∂q_i.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64).
+    device : str | None
+        Warp device string. If None, inferred from arrays.
+    """
+    num_atoms = raw_energies.shape[0]
+
+    kernel = _batch_pme_energy_corrections_with_charge_grad_kernel_overload[wp_dtype]
+    wp.launch(
+        kernel,
+        dim=num_atoms,
+        inputs=[raw_energies, charges, batch_idx, volumes, alpha, total_charges],
+        outputs=[corrected_energies, charge_gradients],
+        device=device,
+    )
+
+
+###########################################################################################
+########################### Module Exports #################################################
+###########################################################################################
+
+__all__ = [
+    # Kernel overloads
+    "_pme_green_structure_factor_kernel_overload",
+    "_batch_pme_green_structure_factor_kernel_overload",
+    "_pme_energy_corrections_kernel_overload",
+    "_batch_pme_energy_corrections_kernel_overload",
+    "_pme_energy_corrections_with_charge_grad_kernel_overload",
+    "_batch_pme_energy_corrections_with_charge_grad_kernel_overload",
+    # Warp launchers (wp_*)
+    "wp_pme_green_structure_factor",
+    "wp_batch_pme_green_structure_factor",
+    "wp_pme_energy_corrections",
+    "wp_batch_pme_energy_corrections",
+    "wp_pme_energy_corrections_with_charge_grad",
+    "wp_batch_pme_energy_corrections_with_charge_grad",
+]

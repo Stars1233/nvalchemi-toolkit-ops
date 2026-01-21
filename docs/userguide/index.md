@@ -27,7 +27,7 @@ the neighbor matrix (or equivalently, list):
 
 ```python
 import torch
-from nvalchemiops.neighborlist import cell_list
+from nvalchemiops.torch.neighbors import cell_list
 
 # Create atomic system data
 positions = torch.randn(1000, 3, device='cuda')  # 1000 atoms

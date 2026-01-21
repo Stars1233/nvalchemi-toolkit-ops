@@ -36,11 +36,11 @@ import numpy as np
 import torch
 from system_utils import create_bulk_structure, create_molecule_structure
 
-from nvalchemiops.neighborlist import (
+from nvalchemiops.torch.neighbors.batched import (
     batch_cell_list,
     batch_naive_neighbor_list,
-    cell_list,
 )
+from nvalchemiops.torch.neighbors.unbatched import cell_list
 
 # %%
 # Set up the computation device

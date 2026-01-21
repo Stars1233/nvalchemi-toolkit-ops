@@ -44,7 +44,7 @@ import requests
 import torch
 import torch.nn as nn
 
-from nvalchemiops.interactions.dispersion.dftd3 import (
+from nvalchemiops.torch.interactions.dispersion import (
     D3Parameters,
     dftd3,
 )

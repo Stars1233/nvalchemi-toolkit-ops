@@ -34,13 +34,17 @@ detection can improve simulation performance by 2-10x.
 import numpy as np
 import torch
 
-from nvalchemiops.neighborlist import (
+from nvalchemiops.torch.neighbors.neighbor_utils import (
     allocate_cell_list,
-    build_cell_list,
-    cell_list_needs_rebuild,
-    estimate_cell_list_sizes,
     estimate_max_neighbors,
+)
+from nvalchemiops.torch.neighbors.rebuild_detection import (
+    cell_list_needs_rebuild,
     neighbor_list_needs_rebuild,
+)
+from nvalchemiops.torch.neighbors.unbatched import (
+    build_cell_list,
+    estimate_cell_list_sizes,
     query_cell_list,
 )
 

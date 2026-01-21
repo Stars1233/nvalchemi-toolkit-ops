@@ -33,18 +33,18 @@ which is essential for molecular simulations and materials science calculations.
 
 import torch
 
-from nvalchemiops.neighborlist import (
+from nvalchemiops.torch.neighbors import neighbor_list
+from nvalchemiops.torch.neighbors.neighbor_utils import (
     allocate_cell_list,
+    estimate_max_neighbors,
+    get_neighbor_list_from_neighbor_matrix,
+)
+from nvalchemiops.torch.neighbors.unbatched import (
     build_cell_list,
     cell_list,
     estimate_cell_list_sizes,
-    estimate_max_neighbors,
     naive_neighbor_list,
-    neighbor_list,
     query_cell_list,
-)
-from nvalchemiops.neighborlist.neighbor_utils import (
-    get_neighbor_list_from_neighbor_matrix,
 )
 
 # %%

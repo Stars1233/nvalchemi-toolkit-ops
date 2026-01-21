@@ -55,7 +55,7 @@ ALCHEMI Toolkit-Ops prioritizes performance, correctness, and usability:
 
 ### Neighbor Finding
 
-The {func}`~nvalchemiops.neighborlist.neighbor_list` function provides a unified
+The {func}`~nvalchemiops.torch.neighbors.neighbor_list` function provides a unified
 interface that automatically selects between algorithms based on system size
 and whether batch indices are provided. It returns either a dense neighbor
 matrix or sparse COO list, with consistent behavior across all modes.
@@ -77,14 +77,14 @@ Choose the right parameters based on your use case:
 Single system with >5000 atoms
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cell, pbc=pbc, method="cell_list"
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.cell_list` — O(N) algorithm
+Dispatches to {func}`~nvalchemiops.torch.neighbors.cell_list` — O(N) algorithm
 using spatial decomposition.
 :::
 
@@ -94,14 +94,14 @@ using spatial decomposition.
 Single system with <5000 atoms
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cell, pbc=pbc, method="naive"
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.naive_neighbor_list` — O(N²)
+Dispatches to {func}`~nvalchemiops.torch.neighbors.naive_neighbor_list` — O(N²)
 algorithm with lower overhead.
 :::
 
@@ -111,7 +111,7 @@ algorithm with lower overhead.
 Multiple systems with >5000 atoms each
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cells, pbc=pbc,
@@ -119,7 +119,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.batch_cell_list` — O(N)
+Dispatches to {func}`~nvalchemiops.torch.neighbors.batch_cell_list` — O(N)
 algorithm for heterogeneous batches.
 :::
 
@@ -129,7 +129,7 @@ algorithm for heterogeneous batches.
 Multiple systems with <5000 atoms each
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cells, pbc=pbc,
@@ -137,7 +137,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.batch_naive_neighbor_list` —
+Dispatches to {func}`~nvalchemiops.torch.neighbors.batch_naive_neighbor_list` —
 O(N²) algorithm for batched small systems.
 :::
 
@@ -148,15 +148,15 @@ When `method` is not specified, `neighbor_list` automatically selects based on
 system size (≥5000 atoms → cell list) and whether `batch_idx` is provided.
 ```
 
-For advanced workflows, {func}`~nvalchemiops.neighborlist.build_cell_list` and
-{func}`~nvalchemiops.neighborlist.query_cell_list` allow caching spatial data
+For advanced workflows, {func}`~nvalchemiops.torch.neighbors.build_cell_list` and
+{func}`~nvalchemiops.torch.neighbors.query_cell_list` allow caching spatial data
 structures between queries. Dual-cutoff variants are available for multi-range
 potentials.
 
 ### Rebuild Detection
 
 For molecular dynamics workflows,
-{func}`~nvalchemiops.neighborlist.cell_list_needs_rebuild` and related functions
+{func}`~nvalchemiops.torch.neighbors.cell_list_needs_rebuild` and related functions
 minimize expensive cell list reconstructions by detecting when atoms have moved
 beyond a skin distance threshold.
 
@@ -184,7 +184,7 @@ Non-periodic molecular system
 
 ```python
 from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list (positions in Bohr)
 neighbors, neighbor_ptr, _ = neighbor_list(
@@ -208,7 +208,7 @@ Single periodic system (crystal, surface)
 
 ```python
 from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list with PBC
 neighbors, neighbor_ptr, shifts = neighbor_list(
@@ -232,7 +232,7 @@ Multiple systems processed simultaneously
 
 ```python
 from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build batched neighbor list
 neighbors, neighbor_ptr, shifts = neighbor_list(
@@ -284,7 +284,7 @@ Small to medium systems (<5000 atoms)
 
 ```python
 from nvalchemiops.interactions.electrostatics import ewald_summation
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
 neighbors, _, shifts = neighbor_list(
@@ -308,7 +308,7 @@ Large systems (>5000 atoms)
 
 ```python
 from nvalchemiops.interactions.electrostatics import particle_mesh_ewald
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
 neighbors, _, shifts = neighbor_list(
@@ -332,7 +332,7 @@ Multiple systems processed simultaneously
 
 ```python
 from nvalchemiops.interactions.electrostatics import ewald_summation
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build batched neighbor list
 neighbors, _, shifts = neighbor_list(

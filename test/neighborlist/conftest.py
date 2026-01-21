@@ -16,7 +16,6 @@
 """Pytest configuration for neighbor list tests."""
 
 import pytest
-import torch
 import warp as wp
 
 
@@ -43,7 +42,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def cuda_available():
     """Check if CUDA is available."""
-    return torch.cuda.is_available()
+    return wp.is_cuda_available()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -53,7 +52,30 @@ def setup_warp():
     wp.init()
 
     # Set device preferences
-    if torch.cuda.is_available():
+    if wp.is_cuda_available():
         wp.set_device("cuda:0")
 
     yield
+
+
+@pytest.fixture(params=["cpu", "cuda:0"], ids=["cpu", "gpu"])
+def device(request):
+    """
+    Fixture providing both CPU and GPU devices.
+
+    GPU tests are skipped if CUDA is not available.
+
+    Returns
+    -------
+    str
+        Device name ("cpu" or "cuda:0")
+
+    Notes
+    -----
+    This fixture can be used for both warp and PyTorch tests.
+    For PyTorch tensors, convert "cuda:0" to "cuda" when needed.
+    """
+    device_name = request.param
+    if device_name == "cuda:0" and not wp.is_cuda_available():
+        pytest.skip("CUDA not available")
+    return device_name

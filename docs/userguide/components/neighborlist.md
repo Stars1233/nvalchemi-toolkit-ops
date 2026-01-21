@@ -13,7 +13,7 @@ GPU-accelerated neighbor list algorithms via [NVIDIA Warp](https://nvidia.github
 with full `torch.compile` support.
 
 ```{tip}
-Start with the unified {func}`~nvalchemiops.neighborlist.neighbor_list` function.
+Start with the unified {func}`~nvalchemiops.torch.neighbors.neighbor_list` function.
 It automatically selects the best algorithm for your system size and handles
 both single and batched inputs.
 ```
@@ -36,7 +36,7 @@ for guidance.
 
 ## Quick Start
 
-The {func}`~nvalchemiops.neighborlist.neighbor_list` function provides a unified
+The {func}`~nvalchemiops.torch.neighbors.neighbor_list` function provides a unified
 interface that automatically dispatches to the optimal algorithm based on system
 size and whether batch indices are provided.
 
@@ -48,14 +48,14 @@ size and whether batch indices are provided.
 Single system with >5000 atoms
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cell, pbc=pbc, method="cell_list"
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.cell_list` --- \(O(N)\) algorithm
+Dispatches to {func}`~nvalchemiops.torch.neighbors.unbatched.cell_list` --- \(O(N)\) algorithm
 using spatial decomposition.
 :::
 
@@ -65,14 +65,14 @@ using spatial decomposition.
 Single system with <5000 atoms
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cell, pbc=pbc, method="naive"
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.naive_neighbor_list` --- \(O(N^2)\)
+Dispatches to {func}`~nvalchemiops.torch.neighbors.unbatched.naive_neighbor_list` --- \(O(N^2)\)
 algorithm with lower overhead.
 :::
 
@@ -82,7 +82,7 @@ algorithm with lower overhead.
 Multiple systems with >5000 atoms each
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cells, pbc=pbc,
@@ -90,7 +90,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.batch_cell_list` --- \(O(N)\)
+Dispatches to {func}`~nvalchemiops.torch.neighbors.batched.batch_cell_list` --- \(O(N)\)
 algorithm for heterogeneous batches.
 :::
 
@@ -100,7 +100,7 @@ algorithm for heterogeneous batches.
 Multiple systems with <5000 atoms each
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
     positions, cutoff, cell=cells, pbc=pbc,
@@ -108,7 +108,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.neighborlist.batch_naive_neighbor_list` ---
+Dispatches to {func}`~nvalchemiops.torch.neighbors.batched.batch_naive_neighbor_list` ---
 \(O(N^2)\) algorithm for batched small systems.
 :::
 
@@ -159,7 +159,7 @@ neighbor_list_coo, neighbor_ptr, shifts = neighbor_list(
 )
 
 # Or convert from matrix format
-from nvalchemiops.neighborlist.neighbor_utils import get_neighbor_list_from_neighbor_matrix
+from nvalchemiops.torch.neighbors.neighbor_utils import get_neighbor_list_from_neighbor_matrix
 
 neighbor_list_coo, neighbor_ptr, shifts_coo = get_neighbor_list_from_neighbor_matrix(
     neighbor_matrix, num_neighbors, neighbor_matrix_shifts, fill_value=num_atoms
@@ -173,7 +173,7 @@ both formats, compute the matrix format first and convert as needed.
 
 ## Method Dispatch
 
-When `method=None`, {func}`~nvalchemiops.neighborlist.neighbor_list` selects
+When `method=None`, {func}`~nvalchemiops.torch.neighbors.neighbor_list` selects
 an algorithm using the following logic:
 
 1. If `cutoff2` is provided, then dual cutoff method
@@ -229,7 +229,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 
 ### Estimation Utilities
 
-The {func}`~nvalchemiops.neighborlist.estimate_max_neighbors` function estimates
+The {func}`~nvalchemiops.torch.neighbors.neighbor_utils.estimate_max_neighbors` function estimates
 the maximum number of neighbors $n$ any atom could have based on the cutoff sphere
 volume ($r$) and atomic density $\rho$, with an additional safety factor ($S$):
 
@@ -240,7 +240,8 @@ $$
 The result is rounded up to the next power of 2 for memory alignment.
 
 ```python
-from nvalchemiops.neighborlist import estimate_max_neighbors, estimate_cell_list_sizes
+from nvalchemiops.torch.neighbors.neighbor_utils import estimate_max_neighbors
+from nvalchemiops.torch.neighbors.unbatched import estimate_cell_list_sizes
 
 max_neighbors = estimate_max_neighbors(
     cutoff,
@@ -284,7 +285,8 @@ This also enables `torch.compile` compatibility by ensuring fixed tensor shapes.
 
 ```python
 import torch
-from nvalchemiops.neighborlist import neighbor_list, estimate_max_neighbors
+from nvalchemiops.torch.neighbors import neighbor_list
+from nvalchemiops.torch.neighbors.neighbor_utils import estimate_max_neighbors
 
 num_atoms = positions.shape[0]
 max_neighbors = estimate_max_neighbors(cutoff, atomic_density=1.0)
@@ -311,9 +313,9 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 For cell list methods, you can also pre-allocate the spatial data structures:
 
 ```python
-from nvalchemiops.neighborlist import (
-    estimate_cell_list_sizes, allocate_cell_list, neighbor_list
-)
+from nvalchemiops.torch.neighbors import neighbor_list
+from nvalchemiops.torch.neighbors.unbatched import estimate_cell_list_sizes
+from nvalchemiops.torch.neighbors.neighbor_utils import allocate_cell_list
 
 max_total_cells, neighbor_search_radius = estimate_cell_list_sizes(cell, pbc, cutoff)
 
@@ -347,7 +349,7 @@ to detect truncation.
 
 ```python
 import torch
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Create atomic system
 positions = torch.rand(1000, 3, device="cuda") * 10.0
@@ -367,7 +369,7 @@ print(f"Average neighbors: {num_neighbors.float().mean():.1f}")
 
 ```python
 import torch
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Three systems of different sizes
 positions = torch.cat([
@@ -424,9 +426,11 @@ For molecular dynamics, separate building and querying allows caching the
 spatial data structure:
 
 ```python
-from nvalchemiops.neighborlist import (
-    build_cell_list, query_cell_list,
-    allocate_cell_list, estimate_cell_list_sizes, estimate_max_neighbors
+from nvalchemiops.torch.neighbors.unbatched import (
+    build_cell_list, query_cell_list, estimate_cell_list_sizes
+)
+from nvalchemiops.torch.neighbors.neighbor_utils import (
+    allocate_cell_list, estimate_max_neighbors
 )
 
 # Setup (once)
@@ -461,10 +465,11 @@ for step in range(num_steps):
 Avoid rebuilding neighbor lists every step by using a skin distance:
 
 ```python
-from nvalchemiops.neighborlist import (
-    build_cell_list, query_cell_list, cell_list_needs_rebuild,
-    allocate_cell_list, estimate_cell_list_sizes
+from nvalchemiops.torch.neighbors.unbatched import (
+    build_cell_list, query_cell_list, estimate_cell_list_sizes
 )
+from nvalchemiops.torch.neighbors.neighbor_utils import allocate_cell_list
+from nvalchemiops.torch.neighbors.rebuild_detection import cell_list_needs_rebuild
 
 cutoff = 5.0
 skin_distance = 1.0
@@ -504,7 +509,7 @@ for step in range(num_steps):
 Compute two neighbor lists with different cutoffs simultaneously:
 
 ```python
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 cutoff1, cutoff2 = 3.0, 6.0
 
@@ -523,4 +528,5 @@ cutoff1, cutoff2 = 3.0, 6.0
 
 This concludes the high-level documentation for neighbor lists: you should now
 be able to integrate `nvalchemiops` routines for your neighbor list requirements,
-and consult the [API reference](../../modules/neighborlist) for further details.
+and consult the API reference for [PyTorch](../../modules/torch/neighbors)
+and [Warp](../../modules/warp/neighbors) for further details.

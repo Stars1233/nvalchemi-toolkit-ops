@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - 2026-XX-XX
+
+- **BREAKING**: PyTorch is now an optional dependency, with the previous functionality
+now moved into a separate `nvalchemiops.torch` namespace. See the hosted documentation
+for a detailed migration guide. Previous imports should still be supported, however
+will issue deprecation warnings. The old interfaces will be removed in an upcoming
+release.
+
 ## 0.2.0 - 2025-12-19
 
 ### Added

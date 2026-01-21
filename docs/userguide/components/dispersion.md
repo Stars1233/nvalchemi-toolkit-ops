@@ -33,8 +33,8 @@ variant provides improved short-range behavior for molecular geometries.
 
 ```{important}
 **DFT-D3 parameters must be explicitly provided** via `d3_params` (a
-{class}`~nvalchemiops.interactions.dispersion.dftd3.D3Parameters` instance or
-dictionary). See [Parameter Setup](#parameter-setup) for details.
+{class}`~nvalchemiops.torch.interactions.dispersion.D3Parameters` instance or
+dictionary). See [Parameter Setup](parameter-setup) for details.
 
 **Unit consistency is required**: Standard D3 parameters use atomic units---
 Bohr for lengths, Hartree for energies. Unit mismatches may cause the neighbor list
@@ -50,8 +50,8 @@ on units for each parameter.
 :sync: matrix
 
 ```python
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.dispersion import dftd3
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor matrix; 50 Bohr cutoff
 neighbor_matrix, num_neighbors, shifts = neighbor_list(
@@ -74,8 +74,8 @@ energy, forces, coord_num = dftd3(
 :sync: coo
 
 ```python
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.dispersion import dftd3
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list in COO format; 50 Bohr cutoff
 neighbor_list_coo, neighbor_list_ptr, unit_shifts = neighbor_list(
@@ -227,7 +227,7 @@ Three options are available:
 ### Option 1: D3Parameters Dataclass (Recommended)
 
 ```python
-from nvalchemiops.interactions.dispersion.dftd3 import D3Parameters
+from nvalchemiops.torch.interactions.dispersion import D3Parameters
 
 d3_params = D3Parameters(
     rcov=covalent_radii,      # [max_Z+1] in Bohr
@@ -323,8 +323,8 @@ energy, forces, coord_num = compiled_dftd3(
 
 ```python
 import torch
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.dispersion import dftd3
+from nvalchemiops.torch.neighbors import neighbor_list
 
 ANGSTROM_TO_BOHR = 1.8897259886
 HARTREE_TO_EV = 27.211386245981
@@ -364,8 +364,8 @@ print(f"                   {energy[0].item() * HARTREE_TO_EV:.6f} eV")
 
 ```python
 import torch
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.dispersion import dftd3
+from nvalchemiops.torch.neighbors import neighbor_list
 
 ANGSTROM_TO_BOHR = 1.8897259886
 
@@ -489,7 +489,7 @@ Forces include both direct and coordination-dependent contributions via chain ru
 ```
 
 This decomposition into direct and chain-rule terms is central to the multi-pass
-kernel architecture described in [Implementation Details](#implementation-details).
+kernel architecture described in [Implementation Details](implementation-details).
 
 ## Implementation Details
 
@@ -526,7 +526,7 @@ Pass 3
 
 ### Neighbor Format Dispatch
 
-The {func}`~nvalchemiops.interactions.dispersion.dftd3.dftd3`
+The {func}`~nvalchemiops.torch.interactions.dispersion.dftd3`
 function dispatches to different kernel implementations based on the neighbor
 representation format:
 
@@ -575,3 +575,7 @@ calculations (C6 interpolation, damping, energy/force accumulation) use
     function in dispersion corrected density functional theory."
     _J. Comput. Chem._ **2011**, _32_, 1456-1465.
     [DOI: 10.1002/jcc.21759](https://doi.org/10.1002/jcc.21759)
+
+## API Reference
+
+For detailed API documentation, see the [PyTorch API](../../modules/torch/dispersion) and [Warp API](../../modules/warp/dispersion) references.
