@@ -112,7 +112,7 @@ USAGE EXAMPLES
 
 Automatic parameter estimation::
 
-    >>> from nvalchemiops.interactions.electrostatics import particle_mesh_ewald
+    >>> from nvalchemiops.torch.interactions.electrostatics import particle_mesh_ewald
     >>> energies, forces = particle_mesh_ewald(
     ...     positions, charges, cell,
     ...     neighbor_list=nl, neighbor_shifts=shifts,
@@ -1620,7 +1620,7 @@ def pme_reciprocal_space(
 
     Precomputed k-vectors for MD loop (fixed cell)::
 
-        >>> from nvalchemiops.interactions.electrostatics import generate_k_vectors_pme
+        >>> from nvalchemiops.torch.interactions.electrostatics import generate_k_vectors_pme
         >>> mesh_dims = (32, 32, 32)
         >>> k_vectors, k_squared = generate_k_vectors_pme(cell, mesh_dims)
         >>> for step in range(num_steps):
@@ -1865,7 +1865,7 @@ def particle_mesh_ewald(
 
     Precomputed k-vectors for MD loop (fixed cell)::
 
-        >>> from nvalchemiops.interactions.electrostatics import generate_k_vectors_pme
+        >>> from nvalchemiops.torch.interactions.electrostatics import generate_k_vectors_pme
         >>> mesh_dims = (32, 32, 32)
         >>> k_vectors, k_squared = generate_k_vectors_pme(cell, mesh_dims)
         >>> for step in range(num_steps):

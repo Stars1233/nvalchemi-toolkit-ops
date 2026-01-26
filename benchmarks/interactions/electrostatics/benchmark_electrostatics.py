@@ -50,16 +50,14 @@ import yaml
 
 from benchmarks.systems import create_crystal_system
 from benchmarks.utils import BenchmarkTimer
-from nvalchemiops.interactions.electrostatics import (
+from nvalchemiops.torch.interactions.electrostatics import (
+    estimate_ewald_parameters,
+    estimate_pme_parameters,
     ewald_real_space,
     ewald_reciprocal_space,
     ewald_summation,
     particle_mesh_ewald,
     pme_reciprocal_space,
-)
-from nvalchemiops.interactions.electrostatics.parameters import (
-    estimate_ewald_parameters,
-    estimate_pme_parameters,
 )
 from nvalchemiops.torch.interactions.electrostatics.k_vectors import (
     generate_k_vectors_ewald_summation,

@@ -37,7 +37,7 @@ def __getattr__(name: str):  # pragma: no cover
         case "dftd3":
             if importlib.util.find_spec("torch") is None:
                 warnings.warn(
-                    "From version 0.2.0 onwards, PyTorch is now an optional dependency"
+                    "From version 0.3.0 onwards, PyTorch is now an optional dependency"
                     " and a PyTorch installation was not detected. This namespace is"
                     " reserved for `warp` kernels directly. For end-users, import from"
                     " `nvalchemiops.torch.interactions.dispersion` instead.",
@@ -56,7 +56,7 @@ def __getattr__(name: str):  # pragma: no cover
                 return dftd3
             else:
                 warnings.warn(
-                    "From version 0.2.0 onwards, PyTorch is now an optional dependency"
+                    "From version 0.3.0 onwards, PyTorch is now an optional dependency"
                     " and the `nvalchemiops.interactions.dispersion` namespace is"
                     " reserved for `warp` kernels directly. For end-users, import from"
                     " `nvalchemiops.torch.interactions.dispersion` instead.",
@@ -75,7 +75,7 @@ def __getattr__(name: str):  # pragma: no cover
                 )
             else:
                 warnings.warn(
-                    "From version 0.2.0 onwards, PyTorch is now an optional dependency"
+                    "From version 0.3.0 onwards, PyTorch is now an optional dependency"
                     " and the `nvalchemiops.interactions.dispersion` namespace is"
                     " reserved for `warp` kernels directly. For end-users, import from"
                     " `nvalchemiops.torch.interactions.dispersion` instead.",

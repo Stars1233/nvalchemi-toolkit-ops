@@ -48,7 +48,7 @@ from nvalchemiops.torch.interactions.electrostatics import ewald_summation
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
@@ -58,8 +58,10 @@ energies, forces = ewald_summation(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=5e-4,  # Target accuracy for parameter estimation
+    compute_forces=True,
 )
 ```
 
@@ -73,7 +75,7 @@ from nvalchemiops.torch.interactions.electrostatics import particle_mesh_ewald
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
@@ -83,8 +85,10 @@ energies, forces = particle_mesh_ewald(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=5e-4,
+    compute_forces=True,
 )
 ```
 
@@ -98,7 +102,7 @@ from nvalchemiops.torch.interactions.electrostatics import coulomb_energy_forces
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
@@ -110,6 +114,7 @@ energies, forces = coulomb_energy_forces(
     cutoff=10.0,
     alpha=0.0,  # Set to >0 for damped (Ewald real-space)
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
 )
 ```
@@ -213,7 +218,9 @@ energies, forces = ewald_summation(
     alpha=0.3,        # Ewald splitting parameter
     k_cutoff=8.0,     # Reciprocal-space cutoff in inverse length
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 ```
 
@@ -227,8 +234,10 @@ energies, forces = ewald_summation(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=1e-6,  # Target relative error
+    compute_forces=True,
 )
 ```
 
@@ -313,7 +322,9 @@ energies, forces = particle_mesh_ewald(
     mesh_dimensions=(32, 32, 32),  # FFT mesh size
     spline_order=4,                 # B-spline order (4 = cubic)
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 ```
 
@@ -329,7 +340,9 @@ energies, forces = particle_mesh_ewald(
     alpha=0.3,
     mesh_spacing=0.5,  # Angstrom (or your length unit)
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 ```
 
@@ -344,8 +357,10 @@ energies, forces = particle_mesh_ewald(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=4e-5,  # Estimates alpha and mesh dimensions
+    compute_forces=True,
 )
 ```
 
@@ -554,7 +569,7 @@ cells = torch.stack([cell0, cell1, cell2])
 pbc = torch.tensor([[True, True, True]] * 3, device=positions.device)
 
 # Build batched neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cells, pbc=pbc,
     batch_idx=batch_idx, method="batch_naive", return_neighbor_list=True
 )
@@ -571,7 +586,9 @@ energies, forces = ewald_summation(
     k_cutoff=8.0,
     batch_idx=batch_idx,
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 
 # energies: (total_atoms,) - per-atom energies
@@ -599,7 +616,8 @@ of energy with respect to atomic positions (forces).
 positions.requires_grad_(True)
 energies, explicit_forces = ewald_summation(
     positions, charges, cell, alpha=0.3, k_cutoff=8.0,
-    neighbor_list=nl, neighbor_shifts=shifts,
+    neighbor_list=nl, neighbor_ptr=nl_ptr, neighbor_shifts=shifts,
+    compute_forces=True,
 )
 
 # Autograd forces should match explicit forces
@@ -624,8 +642,8 @@ energy with respect to atomic charges in the following way:
 charges.requires_grad_(True)
 energies = ewald_summation(
     positions, charges, cell, alpha=0.3, k_cutoff=8.0,
-    neighbor_list=nl, neighbor_shifts=shifts,
-    compute_forces=False,  # disable energy for performance
+    neighbor_list=nl, neighbor_ptr=nl_ptr, neighbor_shifts=shifts,
+    compute_forces=False,  # disable forces for performance
 )
 
 total_energy = energies.sum()
@@ -660,7 +678,7 @@ positions.requires_grad_(True)
 cell.requires_grad_(True)
 energies, forces = ewald_summation(
     positions, charges, cell, alpha=0.3, k_cutoff=8.0,
-    neighbor_list=nl, neighbor_shifts=shifts,
+    neighbor_list=nl, neighbor_ptr=nl_ptr, neighbor_shifts=shifts,
     compute_forces=True,
 )
 
