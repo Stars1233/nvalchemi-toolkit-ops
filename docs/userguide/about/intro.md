@@ -84,7 +84,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.torch.neighbors.cell_list` — O(N) algorithm
+Dispatches to {func}`~nvalchemiops.torch.neighbors.unbatched.cell_list` — O(N) algorithm
 using spatial decomposition.
 :::
 
@@ -101,7 +101,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.torch.neighbors.naive_neighbor_list` — O(N²)
+Dispatches to {func}`~nvalchemiops.torch.neighbors.unbatched.naive_neighbor_list` — O(N²)
 algorithm with lower overhead.
 :::
 
@@ -119,7 +119,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.torch.neighbors.batch_cell_list` — O(N)
+Dispatches to {func}`~nvalchemiops.torch.neighbors.batched.batch_cell_list` — O(N)
 algorithm for heterogeneous batches.
 :::
 
@@ -137,7 +137,7 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 )
 ```
 
-Dispatches to {func}`~nvalchemiops.torch.neighbors.batch_naive_neighbor_list` —
+Dispatches to {func}`~nvalchemiops.torch.neighbors.batched.batch_naive_neighbor_list` —
 O(N²) algorithm for batched small systems.
 :::
 
@@ -162,7 +162,7 @@ beyond a skin distance threshold.
 
 ### Dispersion Corrections
 
-The {func}`~nvalchemiops.interactions.dispersion.dftd3.dftd3`
+The {func}`~nvalchemiops.torch.interactions.dispersion.dftd3`
 function computes DFT-D3(BJ) dispersion energy and forces with
 environment-dependent C6 coefficients based on coordination numbers. It supports
 both neighbor formats, periodic and non-periodic systems, and batched computation.
@@ -183,7 +183,7 @@ Choose the right parameters based on your system type:
 Non-periodic molecular system
 
 ```python
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
+from nvalchemiops.torch.interactions.dispersion import dftd3
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list (positions in Bohr)
@@ -194,7 +194,7 @@ neighbors, neighbor_ptr, _ = neighbor_list(
 # Compute D3 correction (PBE functional)
 energy, forces, coord_num = dftd3(
     positions, numbers, neighbor_list=neighbors,
-    a1=0.4289, a2=4.4407, s8=0.7875, d3_params=d3_params
+    a1=0.3981, a2=4.4211, s8=0.7875, d3_params=d3_params
 )
 
 ```
@@ -207,7 +207,7 @@ energy, forces, coord_num = dftd3(
 Single periodic system (crystal, surface)
 
 ```python
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
+from nvalchemiops.torch.interactions.dispersion import dftd3
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list with PBC
@@ -218,7 +218,7 @@ neighbors, neighbor_ptr, shifts = neighbor_list(
 # Compute D3 correction with periodic shifts
 energy, forces, coord_num = dftd3(
     positions, numbers, neighbor_list=neighbors,
-    a1=0.4289, a2=4.4407, s8=0.7875, d3_params=d3_params,
+    a1=0.3981, a2=4.4211, s8=0.7875, d3_params=d3_params,
     cell=cell, unit_shifts=shifts
 )
 ```
@@ -231,7 +231,7 @@ energy, forces, coord_num = dftd3(
 Multiple systems processed simultaneously
 
 ```python
-from nvalchemiops.interactions.dispersion.dftd3 import dftd3
+from nvalchemiops.torch.interactions.dispersion import dftd3
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build batched neighbor list
@@ -243,7 +243,7 @@ neighbors, neighbor_ptr, shifts = neighbor_list(
 # Compute D3 correction for all systems
 energy, forces, coord_num = dftd3(
     positions, numbers, neighbor_list=neighbors,
-    a1=0.4289, a2=4.4407, s8=0.7875, d3_params=d3_params,
+    a1=0.3981, a2=4.4211, s8=0.7875, d3_params=d3_params,
     cell=cells, unit_shifts=shifts, batch_idx=batch_idx
 )
 ```
@@ -255,15 +255,15 @@ Returns per-system energies with shape `(num_systems,)`.
 
 ```{note}
 DFT-D3 parameters must be provided via the `d3_params` argument (as a
-{class}`~nvalchemiops.interactions.dispersion.dftd3.D3Parameters` instance or
+{class}`~nvalchemiops.torch.interactions.dispersion.D3Parameters` instance or
 dict). See the [dispersion documentation](../components/dispersion) for parameter
 setup and loading from standard reference files.
 ```
 
 ### Electrostatic Interactions
 
-The {func}`~nvalchemiops.interactions.electrostatics.ewald.ewald_summation` and
-{func}`~nvalchemiops.interactions.electrostatics.pme.particle_mesh_ewald` functions
+The {func}`~nvalchemiops.torch.interactions.electrostatics.ewald_summation` and
+{func}`~nvalchemiops.torch.interactions.electrostatics.particle_mesh_ewald` functions
 compute long-range Coulomb interactions in periodic systems. Both methods split the
 slowly-converging $1/r$ potential into real-space (short-range) and reciprocal-space
 (long-range) components, with automatic parameter estimation based on target accuracy.
@@ -283,18 +283,19 @@ Choose the right method based on your system size:
 Small to medium systems (<5000 atoms)
 
 ```python
-from nvalchemiops.interactions.electrostatics import ewald_summation
+from nvalchemiops.torch.interactions.electrostatics import ewald_summation
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbors, _, shifts = neighbor_list(
+neighbors, neighbor_ptr, shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
 # Compute electrostatics (parameters estimated automatically)
 energies, forces = ewald_summation(
     positions, charges, cell, neighbor_list=neighbors,
-    neighbor_shifts=shifts, accuracy=1e-6
+    neighbor_ptr=neighbor_ptr, neighbor_shifts=shifts,
+    accuracy=1e-6, compute_forces=True
 )
 ```
 
@@ -307,18 +308,19 @@ Uses explicit k-vector summation in reciprocal space — $O(N^2)$ scaling.
 Large systems (>5000 atoms)
 
 ```python
-from nvalchemiops.interactions.electrostatics import particle_mesh_ewald
+from nvalchemiops.torch.interactions.electrostatics import particle_mesh_ewald
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbors, _, shifts = neighbor_list(
+neighbors, neighbor_ptr, shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
 # Compute electrostatics with FFT acceleration
 energies, forces = particle_mesh_ewald(
     positions, charges, cell, neighbor_list=neighbors,
-    neighbor_shifts=shifts, accuracy=1e-6
+    neighbor_ptr=neighbor_ptr, neighbor_shifts=shifts,
+    accuracy=1e-6, compute_forces=True
 )
 ```
 
@@ -331,11 +333,11 @@ Uses FFT-based reciprocal-space calculation — $O(N \log N)$ scaling.
 Multiple systems processed simultaneously
 
 ```python
-from nvalchemiops.interactions.electrostatics import ewald_summation
+from nvalchemiops.torch.interactions.electrostatics import ewald_summation
 from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build batched neighbor list
-neighbors, _, shifts = neighbor_list(
+neighbors, neighbor_ptr, shifts = neighbor_list(
     positions, cutoff=10.0, cell=cells, pbc=pbc,
     batch_idx=batch_idx, return_neighbor_list=True
 )
@@ -343,7 +345,8 @@ neighbors, _, shifts = neighbor_list(
 # Batched electrostatics
 energies, forces = ewald_summation(
     positions, charges, cell=cells, neighbor_list=neighbors,
-    neighbor_shifts=shifts, batch_idx=batch_idx, accuracy=1e-6
+    neighbor_ptr=neighbor_ptr, neighbor_shifts=shifts,
+    batch_idx=batch_idx, accuracy=1e-6, compute_forces=True
 )
 ```
 

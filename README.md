@@ -57,7 +57,7 @@ This example uses PyTorch:
 
 ```python
 import torch
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 torch.set_default_dtype(torch.float32)
 torch.set_default_device(torch.device("cuda"))
@@ -102,7 +102,8 @@ matrix representation:
 
 ```python
 import torch
-from nvalchemiops.interactions.dispersion import dftd3
+from nvalchemiops.torch.interactions.dispersion import dftd3
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # the following parameters need to be constructed ahead of time
 positions = ...  # [num_atoms, 3]
@@ -130,8 +131,8 @@ d3_energies, d3_forces, coord_nums, d3_virials = dftd3(
     neighbor_matrix=neighbor_matrix,
     neighbor_matrix_shifts=shift_matrix,
     batch_idx=batch_idx,
-    # functional specific DFT-D3 parameters
-    a1=..., a2=..., s8=...,
+    # functional specific DFT-D3 parameters (PBE shown)
+    a1=0.3981, a2=4.4211, s8=0.7875,
     d3_params=d3_params,
     compute_virial=True
 )
@@ -147,7 +148,7 @@ as well as the forces using the particle mesh Ewald interface.
 
 ```python
 import torch
-from nvalchemiops.interactions.electrostatics import particle_mesh_ewald
+from nvalchemiops.torch.interactions.electrostatics import particle_mesh_ewald
 
 # the following parameters need to be constructed ahead of time
 positions = ...  # [num_atoms, 3]

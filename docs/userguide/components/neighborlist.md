@@ -229,18 +229,16 @@ neighbor_matrix, num_neighbors, shifts = neighbor_list(
 
 ### Estimation Utilities
 
-The {func}`~nvalchemiops.torch.neighbors.neighbor_utils.estimate_max_neighbors` function estimates
+The {func}`~nvalchemiops.neighbors.neighbor_utils.estimate_max_neighbors` function estimates
 the maximum number of neighbors $n$ any atom could have based on the cutoff sphere
 volume ($r$) and atomic density $\rho$, with an additional safety factor ($S$):
 
 $$
-n = 2^{\lceil \log_2(S \times \rho \times \frac{4}{3} \pi r^3) \rceil}
+n = S \times \rho \times \frac{4}{3} \pi r^3
 $$
 
-The result is rounded up to the next power of 2 for memory alignment.
-
 ```python
-from nvalchemiops.torch.neighbors.neighbor_utils import estimate_max_neighbors
+from nvalchemiops.neighbors.neighbor_utils import estimate_max_neighbors
 from nvalchemiops.torch.neighbors.unbatched import estimate_cell_list_sizes
 
 max_neighbors = estimate_max_neighbors(

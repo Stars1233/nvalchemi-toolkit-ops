@@ -84,7 +84,7 @@ def __getattr__(name: str):  # pragma: no cover
     if name == "neighbor_list":
         if importlib.util.find_spec("torch") is None:
             warnings.warn(
-                "From version 0.2.0 onwards, PyTorch is now an optional dependency"
+                "From version 0.3.0 onwards, PyTorch is now an optional dependency"
                 " and a PyTorch installation was not detected. This namespace is"
                 " reserved for `warp` kernels directly. For end-users, import from"
                 " `nvalchemiops.torch.neighbors` instead.",
@@ -103,7 +103,7 @@ def __getattr__(name: str):  # pragma: no cover
             return neighbor_list
         else:
             warnings.warn(
-                "From version 0.2.0 onwards, PyTorch is now an optional dependency"
+                "From version 0.3.0 onwards, PyTorch is now an optional dependency"
                 " and the `nvalchemiops.neighbors` namespace is reserved for `warp`"
                 " kernels directly. For end-users, import from"
                 " `nvalchemiops.torch.neighbors` instead.",

@@ -118,7 +118,7 @@ def generate_k_vectors_ewald_summation(
 
     With automatic parameter estimation::
 
-        >>> from nvalchemiops.interactions.electrostatics import estimate_ewald_parameters
+        >>> from nvalchemiops.torch.interactions.electrostatics import estimate_ewald_parameters
         >>> params = estimate_ewald_parameters(positions, cell)
         >>> k_vectors = generate_k_vectors_ewald_summation(cell, params.reciprocal_space_cutoff)
 

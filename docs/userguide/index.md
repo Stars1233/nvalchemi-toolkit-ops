@@ -73,6 +73,7 @@ print(f"Average neighbors per atom: {num_neighbors.float().mean():.1f}")
 
 about/install
 about/intro
+about/migration
 about/faq
 
 ```

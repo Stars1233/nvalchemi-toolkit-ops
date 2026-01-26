@@ -317,7 +317,16 @@ def neighbor_list(
 
 
 __all__ = [
+    # High-level API
     "neighbor_list",
-    "estimate_batch_cell_list_sizes",
+    # Unbatched algorithms
+    "cell_list",
+    "naive_neighbor_list",
+    "naive_neighbor_list_dual_cutoff",
     "estimate_cell_list_sizes",
+    # Batched algorithms
+    "batch_cell_list",
+    "batch_naive_neighbor_list",
+    "batch_naive_neighbor_list_dual_cutoff",
+    "estimate_batch_cell_list_sizes",
 ]
