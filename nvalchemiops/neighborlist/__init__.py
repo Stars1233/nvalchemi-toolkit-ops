@@ -34,22 +34,55 @@ from nvalchemiops import neighbors as _neighbors
 from nvalchemiops.neighbors import (
     NeighborOverflowError,
     estimate_max_neighbors,
-    wp_batch_build_cell_list,
-    wp_batch_naive_neighbor_matrix,
-    wp_batch_naive_neighbor_matrix_dual_cutoff,
-    wp_batch_naive_neighbor_matrix_pbc,
-    wp_batch_naive_neighbor_matrix_pbc_dual_cutoff,
-    wp_batch_query_cell_list,
-    wp_build_cell_list,
-    wp_check_cell_list_rebuild,
-    wp_check_neighbor_list_rebuild,
-    wp_compute_naive_num_shifts,
-    wp_naive_neighbor_matrix,
-    wp_naive_neighbor_matrix_dual_cutoff,
-    wp_naive_neighbor_matrix_pbc,
-    wp_naive_neighbor_matrix_pbc_dual_cutoff,
-    wp_query_cell_list,
-    wp_zero_array,
+)
+from nvalchemiops.neighbors import (
+    # Import new names and re-export with old wp_* names for backwards compatibility
+    batch_build_cell_list as wp_batch_build_cell_list,
+)
+from nvalchemiops.neighbors import (
+    batch_naive_neighbor_matrix as wp_batch_naive_neighbor_matrix,
+)
+from nvalchemiops.neighbors import (
+    batch_naive_neighbor_matrix_dual_cutoff as wp_batch_naive_neighbor_matrix_dual_cutoff,
+)
+from nvalchemiops.neighbors import (
+    batch_naive_neighbor_matrix_pbc as wp_batch_naive_neighbor_matrix_pbc,
+)
+from nvalchemiops.neighbors import (
+    batch_naive_neighbor_matrix_pbc_dual_cutoff as wp_batch_naive_neighbor_matrix_pbc_dual_cutoff,
+)
+from nvalchemiops.neighbors import (
+    batch_query_cell_list as wp_batch_query_cell_list,
+)
+from nvalchemiops.neighbors import (
+    build_cell_list as wp_build_cell_list,
+)
+from nvalchemiops.neighbors import (
+    check_cell_list_rebuild as wp_check_cell_list_rebuild,
+)
+from nvalchemiops.neighbors import (
+    check_neighbor_list_rebuild as wp_check_neighbor_list_rebuild,
+)
+from nvalchemiops.neighbors import (
+    compute_naive_num_shifts as wp_compute_naive_num_shifts,
+)
+from nvalchemiops.neighbors import (
+    naive_neighbor_matrix as wp_naive_neighbor_matrix,
+)
+from nvalchemiops.neighbors import (
+    naive_neighbor_matrix_dual_cutoff as wp_naive_neighbor_matrix_dual_cutoff,
+)
+from nvalchemiops.neighbors import (
+    naive_neighbor_matrix_pbc as wp_naive_neighbor_matrix_pbc,
+)
+from nvalchemiops.neighbors import (
+    naive_neighbor_matrix_pbc_dual_cutoff as wp_naive_neighbor_matrix_pbc_dual_cutoff,
+)
+from nvalchemiops.neighbors import (
+    query_cell_list as wp_query_cell_list,
+)
+from nvalchemiops.neighbors import (
+    zero_array as wp_zero_array,
 )
 
 # Emit deprecation warning on first import of this module

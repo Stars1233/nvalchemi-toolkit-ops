@@ -24,8 +24,8 @@ import warp as wp
 from nvalchemiops.neighbors.naive import (
     _fill_naive_neighbor_matrix,
     _fill_naive_neighbor_matrix_pbc,
-    wp_naive_neighbor_matrix,
-    wp_naive_neighbor_matrix_pbc,
+    naive_neighbor_matrix,
+    naive_neighbor_matrix_pbc,
 )
 from nvalchemiops.neighbors.neighbor_utils import (
     _compute_naive_num_shifts,
@@ -535,12 +535,12 @@ class TestNaiveKernels:
 
 @pytest.mark.parametrize("half_fill", [True, False])
 class TestNaiveWpLaunchers:
-    """Test the public wp_* launcher API for naive neighbor lists."""
+    """Test the public launcher API for naive neighbor lists."""
 
     @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-    def test_wp_naive_neighbor_matrix(self, device, dtype, half_fill):
-        """Test wp_naive_neighbor_matrix launcher (no PBC)."""
+    def test_naive_neighbor_matrix(self, device, dtype, half_fill):
+        """Test naive_neighbor_matrix launcher (no PBC)."""
         positions, _, _ = create_simple_cubic_system(
             num_atoms=8, dtype=dtype, device=device
         )
@@ -567,7 +567,7 @@ class TestNaiveWpLaunchers:
         wp_num_neighbors = wp.from_torch(num_neighbors, dtype=wp.int32)
 
         # Call launcher
-        wp_naive_neighbor_matrix(
+        naive_neighbor_matrix(
             wp_positions,
             cutoff,
             wp_neighbor_matrix,
@@ -583,8 +583,8 @@ class TestNaiveWpLaunchers:
 
     @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-    def test_wp_naive_neighbor_matrix_pbc(self, device, dtype, half_fill):
-        """Test wp_naive_neighbor_matrix_pbc launcher (with PBC)."""
+    def test_naive_neighbor_matrix_pbc(self, device, dtype, half_fill):
+        """Test naive_neighbor_matrix_pbc launcher (with PBC)."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, dtype=dtype, device=device
         )
@@ -646,7 +646,7 @@ class TestNaiveWpLaunchers:
         wp_num_neighbors = wp.from_torch(num_neighbors, dtype=wp.int32)
 
         # Call launcher
-        wp_naive_neighbor_matrix_pbc(
+        naive_neighbor_matrix_pbc(
             wp_positions,
             cutoff,
             wp_cell,

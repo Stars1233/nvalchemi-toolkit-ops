@@ -19,10 +19,10 @@ import pytest
 import torch
 import warp as wp
 
-from nvalchemiops.neighbors.cell_list import wp_build_cell_list
+from nvalchemiops.neighbors.cell_list import build_cell_list
 from nvalchemiops.neighbors.rebuild_detection import (
-    wp_check_cell_list_rebuild,
-    wp_check_neighbor_list_rebuild,
+    check_cell_list_rebuild,
+    check_neighbor_list_rebuild,
 )
 from nvalchemiops.torch.neighbors.neighbor_utils import allocate_cell_list
 from nvalchemiops.torch.neighbors.unbatched import estimate_cell_list_sizes
@@ -39,10 +39,10 @@ dtypes = [torch.float32, torch.float64]
 @pytest.mark.parametrize("device", devices)
 @pytest.mark.parametrize("dtype", dtypes)
 class TestRebuildDetectionWpLaunchers:
-    """Test the public wp_* launcher API for rebuild detection."""
+    """Test the public launcher API for rebuild detection."""
 
-    def test_wp_check_cell_list_rebuild_no_movement(self, device, dtype):
-        """Test wp_check_cell_list_rebuild launcher with no atomic movement."""
+    def test_check_cell_list_rebuild_no_movement(self, device, dtype):
+        """Test check_cell_list_rebuild launcher with no atomic movement."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, cell_size=2.0, dtype=dtype, device=device
         )
@@ -82,7 +82,7 @@ class TestRebuildDetectionWpLaunchers:
         )
         wp_cell_atom_list = wp.from_torch(cell_atom_list, dtype=wp.int32)
 
-        wp_build_cell_list(
+        build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -102,7 +102,7 @@ class TestRebuildDetectionWpLaunchers:
         wp_rebuild_needed = wp.from_torch(rebuild_needed, dtype=wp.bool)
 
         # Call launcher
-        wp_check_cell_list_rebuild(
+        check_cell_list_rebuild(
             wp_positions,
             wp_atom_to_cell_mapping,
             wp_cells_per_dimension,
@@ -116,8 +116,8 @@ class TestRebuildDetectionWpLaunchers:
         # Should not need rebuild
         assert not rebuild_needed.item(), "Should not need rebuild with no movement"
 
-    def test_wp_check_cell_list_rebuild_large_movement(self, device, dtype):
-        """Test wp_check_cell_list_rebuild launcher with large atomic movement."""
+    def test_check_cell_list_rebuild_large_movement(self, device, dtype):
+        """Test check_cell_list_rebuild launcher with large atomic movement."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, cell_size=2.0, dtype=dtype, device=device
         )
@@ -157,7 +157,7 @@ class TestRebuildDetectionWpLaunchers:
         )
         wp_cell_atom_list = wp.from_torch(cell_atom_list, dtype=wp.int32)
 
-        wp_build_cell_list(
+        build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -182,7 +182,7 @@ class TestRebuildDetectionWpLaunchers:
         wp_rebuild_needed = wp.from_torch(rebuild_needed, dtype=wp.bool)
 
         # Call launcher
-        wp_check_cell_list_rebuild(
+        check_cell_list_rebuild(
             wp_new_positions,
             wp_atom_to_cell_mapping,
             wp_cells_per_dimension,
@@ -196,8 +196,8 @@ class TestRebuildDetectionWpLaunchers:
         # Should need rebuild
         assert rebuild_needed.item(), "Should need rebuild with large movement"
 
-    def test_wp_check_neighbor_list_rebuild_no_movement(self, device, dtype):
-        """Test wp_check_neighbor_list_rebuild launcher with no movement."""
+    def test_check_neighbor_list_rebuild_no_movement(self, device, dtype):
+        """Test check_neighbor_list_rebuild launcher with no movement."""
         positions, _, _ = create_simple_cubic_system(
             num_atoms=8, cell_size=2.0, dtype=dtype, device=device
         )
@@ -219,7 +219,7 @@ class TestRebuildDetectionWpLaunchers:
         wp_rebuild_needed = wp.from_torch(rebuild_needed, dtype=wp.bool)
 
         # Call launcher
-        wp_check_neighbor_list_rebuild(
+        check_neighbor_list_rebuild(
             wp_reference,
             wp_current,
             (skin_distance * skin_distance),
@@ -231,8 +231,8 @@ class TestRebuildDetectionWpLaunchers:
         # Should not need rebuild
         assert not rebuild_needed.item(), "Should not need rebuild with no movement"
 
-    def test_wp_check_neighbor_list_rebuild_large_movement(self, device, dtype):
-        """Test wp_check_neighbor_list_rebuild launcher with large movement."""
+    def test_check_neighbor_list_rebuild_large_movement(self, device, dtype):
+        """Test check_neighbor_list_rebuild launcher with large movement."""
         positions, _, _ = create_simple_cubic_system(
             num_atoms=8, cell_size=2.0, dtype=dtype, device=device
         )
@@ -255,7 +255,7 @@ class TestRebuildDetectionWpLaunchers:
         wp_rebuild_needed = wp.from_torch(rebuild_needed, dtype=wp.bool)
 
         # Call launcher
-        wp_check_neighbor_list_rebuild(
+        check_neighbor_list_rebuild(
             wp_reference,
             wp_current,
             (skin_distance * skin_distance),
@@ -267,8 +267,8 @@ class TestRebuildDetectionWpLaunchers:
         # Should need rebuild
         assert rebuild_needed.item(), "Should need rebuild with large movement"
 
-    def test_wp_check_neighbor_list_rebuild_empty_system(self, device, dtype):
-        """Test wp_check_neighbor_list_rebuild launcher with empty system."""
+    def test_check_neighbor_list_rebuild_empty_system(self, device, dtype):
+        """Test check_neighbor_list_rebuild launcher with empty system."""
         reference_positions = torch.empty((0, 3), dtype=dtype, device=device)
         current_positions = torch.empty((0, 3), dtype=dtype, device=device)
         skin_distance = 0.5
@@ -286,7 +286,7 @@ class TestRebuildDetectionWpLaunchers:
         wp_rebuild_needed = wp.from_torch(rebuild_needed, dtype=wp.bool)
 
         # Call launcher
-        wp_check_neighbor_list_rebuild(
+        check_neighbor_list_rebuild(
             wp_reference,
             wp_current,
             (skin_distance * skin_distance),

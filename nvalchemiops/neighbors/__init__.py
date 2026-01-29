@@ -26,52 +26,52 @@ import warnings
 
 # Warp launchers from batch_cell_list
 from nvalchemiops.neighbors.batch_cell_list import (
-    wp_batch_build_cell_list,
-    wp_batch_query_cell_list,
+    batch_build_cell_list,
+    batch_query_cell_list,
 )
 
 # Warp launchers from batch_naive
 from nvalchemiops.neighbors.batch_naive import (
-    wp_batch_naive_neighbor_matrix,
-    wp_batch_naive_neighbor_matrix_pbc,
+    batch_naive_neighbor_matrix,
+    batch_naive_neighbor_matrix_pbc,
 )
 
 # Warp launchers from batch_naive_dual_cutoff
 from nvalchemiops.neighbors.batch_naive_dual_cutoff import (
-    wp_batch_naive_neighbor_matrix_dual_cutoff,
-    wp_batch_naive_neighbor_matrix_pbc_dual_cutoff,
+    batch_naive_neighbor_matrix_dual_cutoff,
+    batch_naive_neighbor_matrix_pbc_dual_cutoff,
 )
 
 # Warp launchers from cell_list
 from nvalchemiops.neighbors.cell_list import (
-    wp_build_cell_list,
-    wp_query_cell_list,
+    build_cell_list,
+    query_cell_list,
 )
 
 # Warp launchers from naive
 from nvalchemiops.neighbors.naive import (
-    wp_naive_neighbor_matrix,
-    wp_naive_neighbor_matrix_pbc,
+    naive_neighbor_matrix,
+    naive_neighbor_matrix_pbc,
 )
 
 # Warp launchers from naive_dual_cutoff
 from nvalchemiops.neighbors.naive_dual_cutoff import (
-    wp_naive_neighbor_matrix_dual_cutoff,
-    wp_naive_neighbor_matrix_pbc_dual_cutoff,
+    naive_neighbor_matrix_dual_cutoff,
+    naive_neighbor_matrix_pbc_dual_cutoff,
 )
 
 # Warp utilities and launchers from neighbor_utils
 from nvalchemiops.neighbors.neighbor_utils import (
     NeighborOverflowError,
+    compute_naive_num_shifts,
     estimate_max_neighbors,
-    wp_compute_naive_num_shifts,
-    wp_zero_array,
+    zero_array,
 )
 
 # Warp launchers from rebuild_detection
 from nvalchemiops.neighbors.rebuild_detection import (
-    wp_check_cell_list_rebuild,
-    wp_check_neighbor_list_rebuild,
+    check_cell_list_rebuild,
+    check_neighbor_list_rebuild,
 )
 
 
@@ -119,22 +119,22 @@ def __getattr__(name: str):  # pragma: no cover
 
 __all__ = [
     "NeighborOverflowError",
-    "wp_naive_neighbor_matrix",
-    "wp_naive_neighbor_matrix_pbc",
-    "wp_build_cell_list",
-    "wp_query_cell_list",
-    "wp_batch_naive_neighbor_matrix",
-    "wp_batch_naive_neighbor_matrix_pbc",
-    "wp_batch_build_cell_list",
-    "wp_batch_query_cell_list",
-    "wp_naive_neighbor_matrix_dual_cutoff",
-    "wp_naive_neighbor_matrix_pbc_dual_cutoff",
-    "wp_batch_naive_neighbor_matrix_dual_cutoff",
-    "wp_batch_naive_neighbor_matrix_pbc_dual_cutoff",
-    "wp_check_cell_list_rebuild",
-    "wp_check_neighbor_list_rebuild",
-    "wp_compute_naive_num_shifts",
-    "wp_zero_array",
+    "naive_neighbor_matrix",
+    "naive_neighbor_matrix_pbc",
+    "build_cell_list",
+    "query_cell_list",
+    "batch_naive_neighbor_matrix",
+    "batch_naive_neighbor_matrix_pbc",
+    "batch_build_cell_list",
+    "batch_query_cell_list",
+    "naive_neighbor_matrix_dual_cutoff",
+    "naive_neighbor_matrix_pbc_dual_cutoff",
+    "batch_naive_neighbor_matrix_dual_cutoff",
+    "batch_naive_neighbor_matrix_pbc_dual_cutoff",
+    "check_cell_list_rebuild",
+    "check_neighbor_list_rebuild",
+    "compute_naive_num_shifts",
+    "zero_array",
     "estimate_max_neighbors",
     "neighbor_list",
 ]

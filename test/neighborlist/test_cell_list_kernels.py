@@ -25,12 +25,14 @@ from nvalchemiops.neighbors.cell_list import (
     _cell_list_compute_cell_offsets,
     _cell_list_construct_bin_size_overload,
     _cell_list_count_atoms_per_bin_overload,
-    wp_build_cell_list,
-    wp_query_cell_list,
+    build_cell_list,
+    query_cell_list,
 )
 from nvalchemiops.torch.neighbors.neighbor_utils import allocate_cell_list
 from nvalchemiops.torch.neighbors.unbatched import (
-    build_cell_list,
+    build_cell_list as torch_build_cell_list,
+)
+from nvalchemiops.torch.neighbors.unbatched import (
     estimate_cell_list_sizes,
 )
 from nvalchemiops.types import get_wp_dtype, get_wp_mat_dtype, get_wp_vec_dtype
@@ -311,7 +313,7 @@ class TestCellListKernels:
             neighbor_search_radius,
             device,
         )
-        build_cell_list(
+        torch_build_cell_list(
             positions,
             cutoff,
             cell,
@@ -426,10 +428,10 @@ class TestCellListKernels:
 
 @pytest.mark.parametrize("dtype", dtypes)
 class TestCellListWpLaunchers:
-    """Test the public wp_* launcher API for cell lists."""
+    """Test the public launcher API for cell lists."""
 
-    def test_wp_build_cell_list(self, device, dtype):
-        """Test wp_build_cell_list launcher."""
+    def test_build_cell_list(self, device, dtype):
+        """Test build_cell_list launcher."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, cell_size=2.0, dtype=dtype, device=device
         )
@@ -477,8 +479,8 @@ class TestCellListWpLaunchers:
             cell_atom_list, dtype=wp.int32, return_ctype=True
         )
 
-        # Call wp_build_cell_list launcher
-        wp_build_cell_list(
+        # Call build_cell_list launcher
+        build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -500,8 +502,8 @@ class TestCellListWpLaunchers:
             f"Expected {positions.shape[0]} atoms binned, got {total_binned}"
         )
 
-    def test_wp_query_cell_list(self, device, dtype):
-        """Test wp_query_cell_list launcher."""
+    def test_query_cell_list(self, device, dtype):
+        """Test query_cell_list launcher."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, cell_size=2.0, dtype=dtype, device=device
         )
@@ -537,7 +539,7 @@ class TestCellListWpLaunchers:
             cell_list_cache[6], dtype=wp.int32, return_ctype=True
         )
 
-        wp_build_cell_list(
+        build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -581,8 +583,8 @@ class TestCellListWpLaunchers:
             num_neighbors, dtype=wp.int32, return_ctype=True
         )
 
-        # Call wp_query_cell_list launcher
-        wp_query_cell_list(
+        # Call query_cell_list launcher
+        query_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,

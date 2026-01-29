@@ -22,8 +22,8 @@ import warp as wp
 from nvalchemiops.neighbors.naive_dual_cutoff import (
     _fill_naive_neighbor_matrix_dual_cutoff,
     _fill_naive_neighbor_matrix_pbc_dual_cutoff,
-    wp_naive_neighbor_matrix_dual_cutoff,
-    wp_naive_neighbor_matrix_pbc_dual_cutoff,
+    naive_neighbor_matrix_dual_cutoff,
+    naive_neighbor_matrix_pbc_dual_cutoff,
 )
 from nvalchemiops.neighbors.neighbor_utils import _expand_naive_shifts
 from nvalchemiops.torch.neighbors.neighbor_utils import compute_naive_num_shifts
@@ -223,13 +223,13 @@ class TestNaiveDualCutoffKernels:
 
 
 class TestNaiveDualCutoffWpLaunchers:
-    """Test the public wp_* launcher API for naive dual cutoff neighbor lists."""
+    """Test the public launcher API for naive dual cutoff neighbor lists."""
 
     @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
     @pytest.mark.parametrize("half_fill", [True, False])
-    def test_wp_naive_neighbor_matrix_dual_cutoff(self, device, dtype, half_fill):
-        """Test wp_naive_neighbor_matrix_dual_cutoff launcher (no PBC)."""
+    def test_naive_neighbor_matrix_dual_cutoff(self, device, dtype, half_fill):
+        """Test naive_neighbor_matrix_dual_cutoff launcher (no PBC)."""
         positions, _, _ = create_simple_cubic_system(
             num_atoms=8, dtype=dtype, device=device
         )
@@ -263,7 +263,7 @@ class TestNaiveDualCutoffWpLaunchers:
         wp_num_neighbors2 = wp.from_torch(num_neighbors2, dtype=wp.int32)
 
         # Call launcher
-        wp_naive_neighbor_matrix_dual_cutoff(
+        naive_neighbor_matrix_dual_cutoff(
             wp_positions,
             cutoff1,
             cutoff2,
@@ -284,8 +284,8 @@ class TestNaiveDualCutoffWpLaunchers:
     @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
     @pytest.mark.parametrize("half_fill", [True, False])
-    def test_wp_naive_neighbor_matrix_pbc_dual_cutoff(self, device, dtype, half_fill):
-        """Test wp_naive_neighbor_matrix_pbc_dual_cutoff launcher (with PBC)."""
+    def test_naive_neighbor_matrix_pbc_dual_cutoff(self, device, dtype, half_fill):
+        """Test naive_neighbor_matrix_pbc_dual_cutoff launcher (with PBC)."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, dtype=dtype, device=device
         )
@@ -358,7 +358,7 @@ class TestNaiveDualCutoffWpLaunchers:
         wp_num_neighbors2 = wp.from_torch(num_neighbors2, dtype=wp.int32)
 
         # Call launcher
-        wp_naive_neighbor_matrix_pbc_dual_cutoff(
+        naive_neighbor_matrix_pbc_dual_cutoff(
             wp_positions,
             cutoff1,
             cutoff2,

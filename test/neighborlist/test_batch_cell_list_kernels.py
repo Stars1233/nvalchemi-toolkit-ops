@@ -31,8 +31,8 @@ from nvalchemiops.neighbors.batch_cell_list import (
     _batch_cell_list_construct_bin_size_overload,
     _batch_cell_list_count_atoms_per_bin_overload,
     _batch_estimate_cell_list_sizes_overload,
-    wp_batch_build_cell_list,
-    wp_batch_query_cell_list,
+    batch_build_cell_list,
+    batch_query_cell_list,
 )
 from nvalchemiops.neighbors.neighbor_utils import estimate_max_neighbors
 
@@ -546,7 +546,7 @@ class TestBatchCellListKernels:
         wp_cell_offsets = wp.zeros(num_systems, dtype=wp.int32, device=wp_device)
 
         # Build cell list using warp launcher
-        wp_batch_build_cell_list(
+        batch_build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -634,10 +634,10 @@ class TestBatchCellListKernels:
 
 @pytest.mark.parametrize("dtype", dtypes)
 class TestBatchCellListWpLaunchers:
-    """Test the public wp_* launcher API for batch cell lists."""
+    """Test the public launcher API for batch cell lists."""
 
-    def test_wp_batch_build_cell_list(self, device, dtype):
-        """Test wp_batch_build_cell_list launcher."""
+    def test_batch_build_cell_list(self, device, dtype):
+        """Test batch_build_cell_list launcher."""
         positions_torch, cell_torch, pbc_torch, ptr_torch = create_batch_systems(
             num_systems=2,
             atoms_per_system=[4, 6],
@@ -685,7 +685,7 @@ class TestBatchCellListWpLaunchers:
         wp_cell_offsets = wp.zeros(num_systems, dtype=wp.int32, device=wp_device)
 
         # Build cell list using warp launcher
-        wp_batch_build_cell_list(
+        batch_build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -712,8 +712,8 @@ class TestBatchCellListWpLaunchers:
             f"Expected {total_atoms} atoms binned, got {total_binned}"
         )
 
-    def test_wp_batch_query_cell_list(self, device, dtype):
-        """Test wp_batch_query_cell_list launcher."""
+    def test_batch_query_cell_list(self, device, dtype):
+        """Test batch_query_cell_list launcher."""
         positions_torch, cell_torch, pbc_torch, ptr_torch = create_batch_systems(
             num_systems=2,
             atoms_per_system=[4, 6],
@@ -758,7 +758,7 @@ class TestBatchCellListWpLaunchers:
 
         wp_cell_offsets = wp.zeros(num_systems, dtype=wp.int32, device=wp_device)
 
-        wp_batch_build_cell_list(
+        batch_build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -799,8 +799,8 @@ class TestBatchCellListWpLaunchers:
             num_neighbors_torch, dtype=wp.int32, return_ctype=True
         )
 
-        # Call wp_batch_query_cell_list launcher
-        wp_batch_query_cell_list(
+        # Call batch_query_cell_list launcher
+        batch_query_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -927,7 +927,7 @@ class TestBatchCellListScalingPureWarp:
         wp_cell_offsets = wp.zeros(num_systems, dtype=wp.int32, device=wp_device)
 
         # Build cell list using warp launcher
-        wp_batch_build_cell_list(
+        batch_build_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,
@@ -984,7 +984,7 @@ class TestBatchCellListScalingPureWarp:
         )
 
         # Query cell list
-        wp_batch_query_cell_list(
+        batch_query_cell_list(
             wp_positions,
             wp_cell,
             wp_pbc,

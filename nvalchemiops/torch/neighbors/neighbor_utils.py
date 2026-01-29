@@ -26,7 +26,9 @@ import warp as wp
 from nvalchemiops.neighbors.neighbor_utils import (
     NeighborOverflowError,
     estimate_max_neighbors,
-    wp_compute_naive_num_shifts,
+)
+from nvalchemiops.neighbors.neighbor_utils import (
+    compute_naive_num_shifts as wp_compute_naive_num_shifts,
 )
 from nvalchemiops.types import get_wp_dtype, get_wp_mat_dtype
 
@@ -70,7 +72,7 @@ def compute_naive_num_shifts(
 
     See Also
     --------
-    nvalchemiops.neighborlist.neighbor_utils.wp_compute_naive_num_shifts : Core warp launcher
+    nvalchemiops.neighbors.neighbor_utils.compute_naive_num_shifts : Core warp launcher
     """
     num_systems = cell.shape[0]
     device = cell.device
@@ -314,7 +316,7 @@ def allocate_cell_list(
 
     See Also
     --------
-    nvalchemiops.neighborlist.cell_list.wp_build_cell_list : Warp launcher that uses these tensors
+    nvalchemiops.neighbors.cell_list.build_cell_list : Warp launcher that uses these tensors
     nvalchemiops.torch.neighbors.unbatched.build_cell_list : High-level PyTorch wrapper
     nvalchemiops.torch.neighbors.batched.batch_build_cell_list : Batched version
     """

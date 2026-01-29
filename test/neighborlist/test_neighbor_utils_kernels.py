@@ -20,8 +20,8 @@ import torch
 import warp as wp
 
 from nvalchemiops.neighbors.neighbor_utils import (
-    wp_compute_naive_num_shifts,
-    wp_zero_array,
+    compute_naive_num_shifts,
+    zero_array,
 )
 from nvalchemiops.types import get_wp_dtype, get_wp_mat_dtype
 
@@ -35,11 +35,11 @@ dtypes = [torch.float32, torch.float64]
 
 @pytest.mark.parametrize("device", devices)
 class TestNeighborUtilsWpLaunchers:
-    """Test the public wp_* launcher API for neighbor utilities."""
+    """Test the public launcher API for neighbor utilities."""
 
     @pytest.mark.parametrize("dtype", dtypes)
-    def test_wp_compute_naive_num_shifts(self, device, dtype):
-        """Test wp_compute_naive_num_shifts launcher."""
+    def test_compute_naive_num_shifts(self, device, dtype):
+        """Test compute_naive_num_shifts launcher."""
         _, cell, pbc = create_simple_cubic_system(
             num_atoms=8, cell_size=2.0, dtype=dtype, device=device
         )
@@ -59,7 +59,7 @@ class TestNeighborUtilsWpLaunchers:
         wp_num_shifts = wp.from_torch(num_shifts, dtype=wp.int32)
 
         # Call launcher
-        wp_compute_naive_num_shifts(
+        compute_naive_num_shifts(
             wp_cell,
             cutoff,
             wp_pbc,
@@ -75,8 +75,8 @@ class TestNeighborUtilsWpLaunchers:
         )
         assert num_shifts.item() > 0, "Should have at least one shift"
 
-    def test_wp_zero_array(self, device):
-        """Test wp_zero_array launcher."""
+    def test_zero_array(self, device):
+        """Test zero_array launcher."""
         # Test data with non-zero values
         test_array = torch.full((100,), 42, dtype=torch.int32, device=device)
 
@@ -84,19 +84,19 @@ class TestNeighborUtilsWpLaunchers:
         wp_array = wp.from_torch(test_array, dtype=wp.int32)
 
         # Call launcher
-        wp_zero_array(wp_array, device)
+        zero_array(wp_array, device)
 
         # Should be all zeros
         assert torch.all(test_array == 0), "Array should be zeroed"
 
-    def test_wp_zero_array_empty(self, device):
-        """Test wp_zero_array with empty array."""
+    def test_zero_array_empty(self, device):
+        """Test zero_array with empty array."""
         test_array = torch.empty(0, dtype=torch.int32, device=device)
 
         # Convert to warp array
         wp_array = wp.from_torch(test_array, dtype=wp.int32)
 
         # Call launcher - should handle gracefully
-        wp_zero_array(wp_array, device)
+        zero_array(wp_array, device)
 
         assert test_array.shape == (0,)

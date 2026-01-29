@@ -29,8 +29,8 @@ from nvalchemiops.neighbors.neighbor_utils import (
 )
 
 __all__ = [
-    "wp_naive_neighbor_matrix_dual_cutoff",
-    "wp_naive_neighbor_matrix_pbc_dual_cutoff",
+    "naive_neighbor_matrix_dual_cutoff",
+    "naive_neighbor_matrix_pbc_dual_cutoff",
 ]
 
 ###########################################################################################
@@ -285,7 +285,7 @@ for t, v, m in zip(T, V, M):
 ###########################################################################################
 
 
-def wp_naive_neighbor_matrix_dual_cutoff(
+def naive_neighbor_matrix_dual_cutoff(
     positions: wp.array,
     cutoff1: float,
     cutoff2: float,
@@ -333,7 +333,7 @@ def wp_naive_neighbor_matrix_dual_cutoff(
 
     See Also
     --------
-    wp_naive_neighbor_matrix_pbc_dual_cutoff : Version with periodic boundary conditions
+    naive_neighbor_matrix_pbc_dual_cutoff : Version with periodic boundary conditions
     _fill_naive_neighbor_matrix_dual_cutoff : Kernel that performs the computation
     """
     total_atoms = positions.shape[0]
@@ -355,7 +355,7 @@ def wp_naive_neighbor_matrix_dual_cutoff(
     )
 
 
-def wp_naive_neighbor_matrix_pbc_dual_cutoff(
+def naive_neighbor_matrix_pbc_dual_cutoff(
     positions: wp.array,
     cutoff1: float,
     cutoff2: float,
@@ -412,11 +412,11 @@ def wp_naive_neighbor_matrix_pbc_dual_cutoff(
     -----
     - This is a low-level warp interface. For framework bindings, use torch/jax wrappers.
     - Output arrays must be pre-allocated by caller.
-    - Shift vectors must be pre-computed using wp_compute_naive_num_shifts and _expand_naive_shifts.
+    - Shift vectors must be pre-computed using compute_naive_num_shifts and _expand_naive_shifts.
 
     See Also
     --------
-    wp_naive_neighbor_matrix_dual_cutoff : Version without periodic boundary conditions
+    naive_neighbor_matrix_dual_cutoff : Version without periodic boundary conditions
     _fill_naive_neighbor_matrix_pbc_dual_cutoff : Kernel that performs the computation
     """
     total_atoms = positions.shape[0]

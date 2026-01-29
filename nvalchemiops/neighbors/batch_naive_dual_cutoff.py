@@ -29,8 +29,8 @@ from nvalchemiops.neighbors.neighbor_utils import (
 )
 
 __all__ = [
-    "wp_batch_naive_neighbor_matrix_dual_cutoff",
-    "wp_batch_naive_neighbor_matrix_pbc_dual_cutoff",
+    "batch_naive_neighbor_matrix_dual_cutoff",
+    "batch_naive_neighbor_matrix_pbc_dual_cutoff",
 ]
 
 ###########################################################################################
@@ -286,7 +286,7 @@ for t, v, m in zip(T, V, M):
 ###########################################################################################
 
 
-def wp_batch_naive_neighbor_matrix_dual_cutoff(
+def batch_naive_neighbor_matrix_dual_cutoff(
     positions: wp.array,
     cutoff1: float,
     cutoff2: float,
@@ -331,7 +331,7 @@ def wp_batch_naive_neighbor_matrix_dual_cutoff(
 
     See Also
     --------
-    wp_batch_naive_neighbor_matrix_pbc_dual_cutoff : Version with PBC
+    batch_naive_neighbor_matrix_pbc_dual_cutoff : Version with PBC
     _fill_batch_naive_neighbor_matrix_dual_cutoff : Kernel that performs computation
     """
     total_atoms = positions.shape[0]
@@ -355,7 +355,7 @@ def wp_batch_naive_neighbor_matrix_dual_cutoff(
     )
 
 
-def wp_batch_naive_neighbor_matrix_pbc_dual_cutoff(
+def batch_naive_neighbor_matrix_pbc_dual_cutoff(
     positions: wp.array,
     cell: wp.array,
     cutoff1: float,
@@ -415,7 +415,7 @@ def wp_batch_naive_neighbor_matrix_pbc_dual_cutoff(
 
     See Also
     --------
-    wp_batch_naive_neighbor_matrix_dual_cutoff : Version without PBC
+    batch_naive_neighbor_matrix_dual_cutoff : Version without PBC
     _fill_batch_naive_neighbor_matrix_pbc_dual_cutoff : Kernel that performs computation
     """
     total_shifts = shifts.shape[0]

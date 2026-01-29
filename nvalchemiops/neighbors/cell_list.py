@@ -26,12 +26,12 @@ import warp as wp
 from nvalchemiops.math import wpdivmod
 from nvalchemiops.neighbors.neighbor_utils import (
     _update_neighbor_matrix_pbc,
-    wp_zero_array,
+    zero_array,
 )
 
 __all__ = [
-    "wp_build_cell_list",
-    "wp_query_cell_list",
+    "build_cell_list",
+    "query_cell_list",
 ]
 
 ###########################################################################################
@@ -647,7 +647,7 @@ for t, v, m in zip(T, V, M):
 ###########################################################################################
 
 
-def wp_build_cell_list(
+def build_cell_list(
     positions: wp.array,
     cell: wp.array,
     pbc: wp.array,
@@ -704,7 +704,7 @@ def wp_build_cell_list(
 
     See Also
     --------
-    wp_query_cell_list : Query cell list to build neighbor matrix (call after this)
+    query_cell_list : Query cell list to build neighbor matrix (call after this)
     wp.utils.array_scan : Warp utility for computing prefix sums
     _cell_list_construct_bin_size : Kernel for computing cell dimensions
     _cell_list_count_atoms_per_bin : Kernel for counting atoms per cell
@@ -748,7 +748,7 @@ def wp_build_cell_list(
     wp.utils.array_scan(atoms_per_cell_count, cell_atom_start_indices, inclusive=False)
 
     # Zero counts before binning atoms (second pass needs fresh counts)
-    wp_zero_array(atoms_per_cell_count, device)
+    zero_array(atoms_per_cell_count, device)
 
     # Bin atoms (expects atoms_per_cell_count to be zeroed)
     wp.launch(
@@ -768,7 +768,7 @@ def wp_build_cell_list(
     )
 
 
-def wp_query_cell_list(
+def query_cell_list(
     positions: wp.array,
     cell: wp.array,
     pbc: wp.array,
@@ -837,7 +837,7 @@ def wp_query_cell_list(
 
     See Also
     --------
-    wp_build_cell_list : Build cell list data structures (call before this)
+    build_cell_list : Build cell list data structures (call before this)
     _cell_list_build_neighbor_matrix : Kernel that performs the neighbor search
     """
     total_atoms = positions.shape[0]

@@ -51,8 +51,8 @@ class NeighborOverflowError(Exception):
 
 __all__ = [
     "NeighborOverflowError",
-    "wp_compute_naive_num_shifts",
-    "wp_zero_array",
+    "compute_naive_num_shifts",
+    "zero_array",
     "estimate_max_neighbors",
 ]
 
@@ -283,7 +283,7 @@ def _zero_int32_array_kernel(
     array[tid] = 0
 
 
-def wp_zero_array(
+def zero_array(
     array: wp.array,
     device: str,
 ) -> None:
@@ -317,7 +317,7 @@ def wp_zero_array(
     )
 
 
-def wp_compute_naive_num_shifts(
+def compute_naive_num_shifts(
     cell: wp.array,
     cutoff: float,
     pbc: wp.array,

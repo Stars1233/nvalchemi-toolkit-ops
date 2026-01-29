@@ -214,7 +214,7 @@ for t, v, m in zip(T, V, M):
 ###########################################################################################
 
 
-def wp_naive_neighbor_matrix(
+def naive_neighbor_matrix(
     positions: wp.array,
     cutoff: float,
     neighbor_matrix: wp.array,
@@ -257,7 +257,7 @@ def wp_naive_neighbor_matrix(
 
     See Also
     --------
-    wp_naive_neighbor_matrix_pbc : Version with periodic boundary conditions
+    naive_neighbor_matrix_pbc : Version with periodic boundary conditions
     _fill_naive_neighbor_matrix : Kernel that performs the computation
     """
     total_atoms = positions.shape[0]
@@ -276,7 +276,7 @@ def wp_naive_neighbor_matrix(
     )
 
 
-def wp_naive_neighbor_matrix_pbc(
+def naive_neighbor_matrix_pbc(
     positions: wp.array,
     cutoff: float,
     cell: wp.array,
@@ -326,13 +326,13 @@ def wp_naive_neighbor_matrix_pbc(
     -----
     - This is a low-level warp interface. For framework bindings, use torch/jax wrappers.
     - Output arrays must be pre-allocated by caller.
-    - Shift vectors must be pre-computed using wp_compute_naive_num_shifts and _expand_naive_shifts.
+    - Shift vectors must be pre-computed using compute_naive_num_shifts and _expand_naive_shifts.
 
     See Also
     --------
-    wp_naive_neighbor_matrix : Version without periodic boundary conditions
+    naive_neighbor_matrix : Version without periodic boundary conditions
     _fill_naive_neighbor_matrix_pbc : Kernel that performs the computation
-    wp_compute_naive_num_shifts : Computes shift ranges
+    compute_naive_num_shifts : Computes shift ranges
     _expand_naive_shifts : Expands shift ranges into explicit vectors
     """
     total_atoms = positions.shape[0]

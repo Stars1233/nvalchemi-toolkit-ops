@@ -26,12 +26,12 @@ import warp as wp
 from nvalchemiops.math import wpdivmod
 from nvalchemiops.neighbors.neighbor_utils import (
     _update_neighbor_matrix_pbc,
-    wp_zero_array,
+    zero_array,
 )
 
 __all__ = [
-    "wp_batch_build_cell_list",
-    "wp_batch_query_cell_list",
+    "batch_build_cell_list",
+    "batch_query_cell_list",
 ]
 
 ###########################################################################################
@@ -690,7 +690,7 @@ for t, v, m in zip(T, V, M):
 ###########################################################################################
 
 
-def wp_batch_build_cell_list(
+def batch_build_cell_list(
     positions: wp.array,
     cell: wp.array,
     pbc: wp.array,
@@ -754,7 +754,7 @@ def wp_batch_build_cell_list(
 
     See Also
     --------
-    wp_batch_query_cell_list : Query cell list to build neighbor matrix (call after this)
+    batch_query_cell_list : Query cell list to build neighbor matrix (call after this)
     _batch_cell_list_construct_bin_size : Kernel for computing cell dimensions
     _batch_cell_list_count_atoms_per_bin : Kernel for counting atoms per cell
     _batch_cell_list_bin_atoms : Kernel for binning atoms into cells
@@ -811,7 +811,7 @@ def wp_batch_build_cell_list(
     wp.utils.array_scan(atoms_per_cell_count, cell_atom_start_indices, inclusive=False)
 
     # Zero counts before binning atoms (second pass needs fresh counts)
-    wp_zero_array(atoms_per_cell_count, device)
+    zero_array(atoms_per_cell_count, device)
 
     # Bin atoms (expects atoms_per_cell_count to be zeroed)
     wp.launch(
@@ -833,7 +833,7 @@ def wp_batch_build_cell_list(
     )
 
 
-def wp_batch_query_cell_list(
+def batch_query_cell_list(
     positions: wp.array,
     cell: wp.array,
     pbc: wp.array,
@@ -877,17 +877,17 @@ def wp_batch_query_cell_list(
         Radius of neighboring cells to search for each system.
     cell_offsets : wp.array, shape (num_systems,), dtype=wp.int32
         Starting index in global cell arrays for each system.
-        Output from wp_batch_build_cell_list.
+        Output from batch_build_cell_list.
     atom_periodic_shifts : wp.array, shape (total_atoms, 3), dtype=wp.vec3i
-        Periodic boundary crossings for each atom. Output from wp_batch_build_cell_list.
+        Periodic boundary crossings for each atom. Output from batch_build_cell_list.
     atom_to_cell_mapping : wp.array, shape (total_atoms, 3), dtype=wp.vec3i
-        3D cell coordinates for each atom. Output from wp_batch_build_cell_list.
+        3D cell coordinates for each atom. Output from batch_build_cell_list.
     atoms_per_cell_count : wp.array, shape (max_total_cells,), dtype=wp.int32
-        Number of atoms in each cell. Output from wp_batch_build_cell_list.
+        Number of atoms in each cell. Output from batch_build_cell_list.
     cell_atom_start_indices : wp.array, shape (max_total_cells,), dtype=wp.int32
-        Starting index in cell_atom_list for each cell. Output from wp_batch_build_cell_list.
+        Starting index in cell_atom_list for each cell. Output from batch_build_cell_list.
     cell_atom_list : wp.array, shape (total_atoms,), dtype=wp.int32
-        Flattened list of atom indices organized by cell. Output from wp_batch_build_cell_list.
+        Flattened list of atom indices organized by cell. Output from batch_build_cell_list.
     neighbor_matrix : wp.array, shape (total_atoms, max_neighbors), dtype=wp.int32
         OUTPUT: Neighbor matrix to be filled with neighbor atom indices.
     neighbor_matrix_shifts : wp.array, shape (total_atoms, max_neighbors, 3), dtype=wp.vec3i
@@ -908,7 +908,7 @@ def wp_batch_query_cell_list(
 
     See Also
     --------
-    wp_batch_build_cell_list : Build cell list data structures (call before this)
+    batch_build_cell_list : Build cell list data structures (call before this)
     _batch_cell_list_build_neighbor_matrix : Kernel that performs the neighbor search
     """
     total_atoms = positions.shape[0]

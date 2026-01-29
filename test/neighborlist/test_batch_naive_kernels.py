@@ -22,8 +22,8 @@ import warp as wp
 from nvalchemiops.neighbors.batch_naive import (
     _fill_batch_naive_neighbor_matrix,
     _fill_batch_naive_neighbor_matrix_pbc,
-    wp_batch_naive_neighbor_matrix,
-    wp_batch_naive_neighbor_matrix_pbc,
+    batch_naive_neighbor_matrix,
+    batch_naive_neighbor_matrix_pbc,
 )
 from nvalchemiops.neighbors.neighbor_utils import _expand_naive_shifts
 from nvalchemiops.torch.neighbors.neighbor_utils import compute_naive_num_shifts
@@ -183,13 +183,13 @@ class TestBatchNaiveKernels:
 
 
 class TestBatchNaiveWpLaunchers:
-    """Test the public wp_* launcher API for batch naive neighbor lists."""
+    """Test the public launcher API for batch naive neighbor lists."""
 
     @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
     @pytest.mark.parametrize("half_fill", [True, False])
-    def test_wp_batch_naive_neighbor_matrix(self, device, dtype, half_fill):
-        """Test wp_batch_naive_neighbor_matrix launcher (no PBC)."""
+    def test_batch_naive_neighbor_matrix(self, device, dtype, half_fill):
+        """Test batch_naive_neighbor_matrix launcher (no PBC)."""
         atoms_per_system = [5, 7]
         positions_batch, _, _, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
@@ -217,7 +217,7 @@ class TestBatchNaiveWpLaunchers:
         wp_num_neighbors = wp.from_torch(num_neighbors, dtype=wp.int32)
 
         # Call launcher
-        wp_batch_naive_neighbor_matrix(
+        batch_naive_neighbor_matrix(
             wp_positions,
             cutoff,
             wp_batch_idx,
@@ -236,8 +236,8 @@ class TestBatchNaiveWpLaunchers:
     @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
     @pytest.mark.parametrize("half_fill", [True, False])
-    def test_wp_batch_naive_neighbor_matrix_pbc(self, device, dtype, half_fill):
-        """Test wp_batch_naive_neighbor_matrix_pbc launcher (with PBC)."""
+    def test_batch_naive_neighbor_matrix_pbc(self, device, dtype, half_fill):
+        """Test batch_naive_neighbor_matrix_pbc launcher (with PBC)."""
         atoms_per_system = [4, 5]
         num_systems = 2
         positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
@@ -300,7 +300,7 @@ class TestBatchNaiveWpLaunchers:
         wp_num_neighbors = wp.from_torch(num_neighbors, dtype=wp.int32)
 
         # Call launcher
-        wp_batch_naive_neighbor_matrix_pbc(
+        batch_naive_neighbor_matrix_pbc(
             wp_positions,
             wp_cell,
             cutoff,

@@ -25,8 +25,8 @@ import torch
 import warp as wp
 
 from nvalchemiops.neighbors.rebuild_detection import (
-    wp_check_cell_list_rebuild,
-    wp_check_neighbor_list_rebuild,
+    check_cell_list_rebuild,
+    check_neighbor_list_rebuild,
 )
 from nvalchemiops.types import get_wp_dtype, get_wp_mat_dtype, get_wp_vec_dtype
 
@@ -106,7 +106,7 @@ def _cell_list_needs_rebuild(
     wp_rebuild_flag = wp.from_torch(rebuild_needed, dtype=wp.bool, return_ctype=True)
 
     # Call core warp launcher
-    wp_check_cell_list_rebuild(
+    check_cell_list_rebuild(
         current_positions=wp_current_positions,
         atom_to_cell_mapping=wp_atom_to_cell_mapping,
         cells_per_dimension=wp_cells_per_dimension,
@@ -251,7 +251,7 @@ def _neighbor_list_needs_rebuild(
     wp_rebuild_flag = wp.from_torch(rebuild_needed, dtype=wp.bool, return_ctype=True)
 
     # Call core warp launcher
-    wp_check_neighbor_list_rebuild(
+    check_neighbor_list_rebuild(
         reference_positions=wp_reference_positions,
         current_positions=wp_current_positions,
         skin_distance_threshold=skin_distance_threshold,

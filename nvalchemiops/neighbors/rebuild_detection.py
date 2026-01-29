@@ -25,8 +25,8 @@ from typing import Any
 import warp as wp
 
 __all__ = [
-    "wp_check_cell_list_rebuild",
-    "wp_check_neighbor_list_rebuild",
+    "check_cell_list_rebuild",
+    "check_neighbor_list_rebuild",
 ]
 
 ###########################################################################################
@@ -289,7 +289,7 @@ for t, v in zip(_T, _V):
 ###########################################################################################
 
 
-def wp_check_cell_list_rebuild(
+def check_cell_list_rebuild(
     current_positions: wp.array,
     atom_to_cell_mapping: wp.array,
     cells_per_dimension: wp.array,
@@ -348,7 +348,7 @@ def wp_check_cell_list_rebuild(
     )
 
 
-def wp_check_neighbor_list_rebuild(
+def check_neighbor_list_rebuild(
     reference_positions: wp.array,
     current_positions: wp.array,
     skin_distance_threshold: float,

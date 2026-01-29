@@ -27,16 +27,20 @@ import warp as wp
 
 from nvalchemiops.neighbors.batch_cell_list import (
     _batch_estimate_cell_list_sizes_overload,
-    wp_batch_build_cell_list,
-    wp_batch_query_cell_list,
+)
+from nvalchemiops.neighbors.batch_cell_list import (
+    batch_build_cell_list as wp_batch_build_cell_list,
+)
+from nvalchemiops.neighbors.batch_cell_list import (
+    batch_query_cell_list as wp_batch_query_cell_list,
 )
 from nvalchemiops.neighbors.batch_naive import (
-    wp_batch_naive_neighbor_matrix,
-    wp_batch_naive_neighbor_matrix_pbc,
+    batch_naive_neighbor_matrix,
+    batch_naive_neighbor_matrix_pbc,
 )
 from nvalchemiops.neighbors.batch_naive_dual_cutoff import (
-    wp_batch_naive_neighbor_matrix_dual_cutoff,
-    wp_batch_naive_neighbor_matrix_pbc_dual_cutoff,
+    batch_naive_neighbor_matrix_dual_cutoff,
+    batch_naive_neighbor_matrix_pbc_dual_cutoff,
 )
 from nvalchemiops.neighbors.neighbor_utils import (
     _expand_naive_shifts,
@@ -114,7 +118,7 @@ def _batch_naive_neighbor_matrix_no_pbc(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_naive.wp_batch_naive_neighbor_matrix : Core warp launcher
+    nvalchemiops.neighbors.batch_naive.batch_naive_neighbor_matrix : Core warp launcher
     batch_naive_neighbor_list : Higher-level wrapper function
     """
     device = positions.device
@@ -129,7 +133,7 @@ def _batch_naive_neighbor_matrix_no_pbc(
     )
     wp_num_neighbors = wp.from_torch(num_neighbors, dtype=wp.int32, return_ctype=True)
 
-    wp_batch_naive_neighbor_matrix(
+    batch_naive_neighbor_matrix(
         positions=wp_positions,
         cutoff=cutoff,
         batch_idx=wp_batch_idx,
@@ -213,8 +217,8 @@ def _batch_naive_neighbor_matrix_pbc(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_naive.wp_batch_naive_neighbor_matrix_pbc : Core warp launcher
-    nvalchemiops.neighborlist.neighbor_utils._expand_naive_shifts : Kernel for expanding shifts
+    nvalchemiops.neighbors.batch_naive.batch_naive_neighbor_matrix_pbc : Core warp launcher
+    nvalchemiops.neighbors.neighbor_utils._expand_naive_shifts : Kernel for expanding shifts
     batch_naive_neighbor_list : Higher-level wrapper function
     """
     num_systems = cell.shape[0]
@@ -259,7 +263,7 @@ def _batch_naive_neighbor_matrix_pbc(
     if max_atoms_per_system is None:
         max_atoms_per_system = (batch_ptr[1:] - batch_ptr[:-1]).max().item()
 
-    wp_batch_naive_neighbor_matrix_pbc(
+    batch_naive_neighbor_matrix_pbc(
         positions=wp_positions,
         cell=wp_cell,
         cutoff=cutoff,
@@ -380,8 +384,8 @@ def batch_naive_neighbor_list(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_naive.wp_batch_naive_neighbor_matrix : Core warp launcher (no PBC)
-    nvalchemiops.neighborlist.batch_naive.wp_batch_naive_neighbor_matrix_pbc : Core warp launcher (with PBC)
+    nvalchemiops.neighbors.batch_naive.batch_naive_neighbor_matrix : Core warp launcher (no PBC)
+    nvalchemiops.neighbors.batch_naive.batch_naive_neighbor_matrix_pbc : Core warp launcher (with PBC)
     batch_cell_list : O(N) cell list method for larger systems
     """
     if pbc is None and cell is not None:
@@ -527,7 +531,7 @@ def _batch_naive_neighbor_matrix_no_pbc_dual_cutoff(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_naive_dual_cutoff.wp_batch_naive_neighbor_matrix_dual_cutoff : Core warp launcher
+    nvalchemiops.neighbors.batch_naive_dual_cutoff.batch_naive_neighbor_matrix_dual_cutoff : Core warp launcher
     batch_naive_neighbor_list_dual_cutoff : High-level wrapper function
     """
     device = positions.device
@@ -546,7 +550,7 @@ def _batch_naive_neighbor_matrix_no_pbc_dual_cutoff(
     )
     wp_num_neighbors2 = wp.from_torch(num_neighbors2, dtype=wp.int32, return_ctype=True)
 
-    wp_batch_naive_neighbor_matrix_dual_cutoff(
+    batch_naive_neighbor_matrix_dual_cutoff(
         positions=wp_positions,
         cutoff1=cutoff1,
         cutoff2=cutoff2,
@@ -597,7 +601,7 @@ def _batch_naive_neighbor_matrix_pbc_dual_cutoff(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_naive_dual_cutoff.wp_batch_naive_neighbor_matrix_pbc_dual_cutoff : Core warp launcher
+    nvalchemiops.neighbors.batch_naive_dual_cutoff.batch_naive_neighbor_matrix_pbc_dual_cutoff : Core warp launcher
     batch_naive_neighbor_list_dual_cutoff : High-level wrapper function
     """
     num_systems = cell.shape[0]
@@ -649,7 +653,7 @@ def _batch_naive_neighbor_matrix_pbc_dual_cutoff(
     if max_atoms_per_system is None:
         max_atoms_per_system = (batch_ptr[1:] - batch_ptr[:-1]).max().item()
 
-    wp_batch_naive_neighbor_matrix_pbc_dual_cutoff(
+    batch_naive_neighbor_matrix_pbc_dual_cutoff(
         positions=wp_positions,
         cell=wp_cell,
         cutoff1=cutoff1,
@@ -718,8 +722,8 @@ def batch_naive_neighbor_list_dual_cutoff(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_naive_dual_cutoff.wp_batch_naive_neighbor_matrix_dual_cutoff : Core warp launcher (no PBC)
-    nvalchemiops.neighborlist.batch_naive_dual_cutoff.wp_batch_naive_neighbor_matrix_pbc_dual_cutoff : Core warp launcher (with PBC)
+    nvalchemiops.neighbors.batch_naive_dual_cutoff.batch_naive_neighbor_matrix_dual_cutoff : Core warp launcher (no PBC)
+    nvalchemiops.neighbors.batch_naive_dual_cutoff.batch_naive_neighbor_matrix_pbc_dual_cutoff : Core warp launcher (with PBC)
     batch_naive_neighbor_list : Single cutoff version
     """
     if pbc is None and cell is not None:
@@ -952,7 +956,7 @@ def estimate_batch_cell_list_sizes(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_cell_list.wp_batch_build_cell_list : Core warp launcher
+    nvalchemiops.neighbors.batch_cell_list.batch_build_cell_list : Core warp launcher
     allocate_cell_list : Allocates tensors based on these estimates
     batch_build_cell_list : High-level wrapper that uses these estimates
     """
@@ -1041,7 +1045,7 @@ def _batch_build_cell_list_op(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_cell_list.wp_batch_build_cell_list : Core warp launcher
+    nvalchemiops.neighbors.batch_cell_list.batch_build_cell_list : Core warp launcher
     batch_build_cell_list : High-level wrapper function
     """
     device = positions.device
@@ -1155,7 +1159,7 @@ def batch_build_cell_list(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_cell_list.wp_batch_build_cell_list : Core warp launcher
+    nvalchemiops.neighbors.batch_cell_list.batch_build_cell_list : Core warp launcher
     estimate_batch_cell_list_sizes : Estimate memory requirements
     batch_query_cell_list : Query the built cell list for neighbors
     batch_cell_list : High-level function that builds and queries in one call
@@ -1203,7 +1207,7 @@ def _batch_query_cell_list_op(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_cell_list.wp_batch_query_cell_list : Core warp launcher
+    nvalchemiops.neighbors.batch_cell_list.batch_query_cell_list : Core warp launcher
     batch_query_cell_list : High-level wrapper function
     """
     device = positions.device
@@ -1311,7 +1315,7 @@ def batch_query_cell_list(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_cell_list.wp_batch_query_cell_list : Core warp launcher
+    nvalchemiops.neighbors.batch_cell_list.batch_query_cell_list : Core warp launcher
     batch_build_cell_list : Builds the cell list data structures
     batch_cell_list : High-level function that builds and queries in one call
     """
@@ -1410,8 +1414,8 @@ def batch_cell_list(
 
     See Also
     --------
-    nvalchemiops.neighborlist.batch_cell_list.wp_batch_build_cell_list : Core warp launcher for building
-    nvalchemiops.neighborlist.batch_cell_list.wp_batch_query_cell_list : Core warp launcher for querying
+    nvalchemiops.neighbors.batch_cell_list.batch_build_cell_list : Core warp launcher for building
+    nvalchemiops.neighbors.batch_cell_list.batch_query_cell_list : Core warp launcher for querying
     batch_naive_neighbor_list : O(N²) method for small systems
     """
     total_atoms = positions.shape[0]
