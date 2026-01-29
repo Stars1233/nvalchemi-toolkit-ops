@@ -1469,11 +1469,11 @@ for t, v, m in zip(_T, _V, _M):
 
 
 ###########################################################################################
-########################### Warp Launcher Functions (wp_*) #################################
+########################### Warp Launcher Functions #######################################
 ###########################################################################################
 
 
-def wp_bspline_weight(
+def bspline_weight_launcher(
     u: wp.array,
     order: int,
     weights: wp.array,
@@ -1506,7 +1506,7 @@ def wp_bspline_weight(
     )
 
 
-def wp_spline_spread(
+def spline_spread(
     positions: wp.array,
     values: wp.array,
     cell_inv_t: wp.array,
@@ -1549,7 +1549,7 @@ def wp_spline_spread(
     )
 
 
-def wp_spline_gather(
+def spline_gather(
     positions: wp.array,
     cell_inv_t: wp.array,
     order: int,
@@ -1592,7 +1592,7 @@ def wp_spline_gather(
     )
 
 
-def wp_spline_gather_vec3(
+def spline_gather_vec3(
     positions: wp.array,
     charges: wp.array,
     cell_inv_t: wp.array,
@@ -1638,7 +1638,7 @@ def wp_spline_gather_vec3(
     )
 
 
-def wp_spline_gather_gradient(
+def spline_gather_gradient(
     positions: wp.array,
     charges: wp.array,
     cell_inv_t: wp.array,
@@ -1684,7 +1684,7 @@ def wp_spline_gather_gradient(
     )
 
 
-def wp_batch_spline_spread(
+def batch_spline_spread(
     positions: wp.array,
     values: wp.array,
     batch_idx: wp.array,
@@ -1730,7 +1730,7 @@ def wp_batch_spline_spread(
     )
 
 
-def wp_batch_spline_gather(
+def batch_spline_gather(
     positions: wp.array,
     batch_idx: wp.array,
     cell_inv_t: wp.array,
@@ -1776,7 +1776,7 @@ def wp_batch_spline_gather(
     )
 
 
-def wp_batch_spline_gather_vec3(
+def batch_spline_gather_vec3(
     positions: wp.array,
     charges: wp.array,
     batch_idx: wp.array,
@@ -1825,7 +1825,7 @@ def wp_batch_spline_gather_vec3(
     )
 
 
-def wp_batch_spline_gather_gradient(
+def batch_spline_gather_gradient(
     positions: wp.array,
     charges: wp.array,
     batch_idx: wp.array,
@@ -1919,14 +1919,14 @@ __all__ = [
     "_bspline_gather_channels_kernel_overload",
     "_batch_bspline_spread_channels_kernel_overload",
     "_batch_bspline_gather_channels_kernel_overload",
-    # Warp launchers (wp_*)
-    "wp_bspline_weight",
-    "wp_spline_spread",
-    "wp_spline_gather",
-    "wp_spline_gather_vec3",
-    "wp_spline_gather_gradient",
-    "wp_batch_spline_spread",
-    "wp_batch_spline_gather",
-    "wp_batch_spline_gather_vec3",
-    "wp_batch_spline_gather_gradient",
+    # Warp launchers
+    "bspline_weight_launcher",
+    "spline_spread",
+    "spline_gather",
+    "spline_gather_vec3",
+    "spline_gather_gradient",
+    "batch_spline_spread",
+    "batch_spline_gather",
+    "batch_spline_gather_vec3",
+    "batch_spline_gather_gradient",
 ]

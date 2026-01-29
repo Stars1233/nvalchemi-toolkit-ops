@@ -17,7 +17,7 @@
 Test Suite for B-Spline Kernels (Pure Warp)
 ===========================================
 
-Tests the Warp kernels and wp_* launchers in nvalchemiops.math.spline.
+Tests the Warp kernels and launchers in nvalchemiops.math.spline.
 
 Test Categories
 ---------------
@@ -46,14 +46,14 @@ import pytest
 import warp as wp
 
 from nvalchemiops.math.spline import (
-    wp_batch_spline_gather,
-    wp_batch_spline_gather_gradient,
-    wp_batch_spline_gather_vec3,
-    wp_batch_spline_spread,
-    wp_spline_gather,
-    wp_spline_gather_gradient,
-    wp_spline_gather_vec3,
-    wp_spline_spread,
+    batch_spline_gather,
+    batch_spline_gather_gradient,
+    batch_spline_gather_vec3,
+    batch_spline_spread,
+    spline_gather,
+    spline_gather_gradient,
+    spline_gather_vec3,
+    spline_spread,
 )
 
 # =============================================================================
@@ -134,8 +134,8 @@ def batch_system():
 # =============================================================================
 
 
-class TestWpSplineSpread:
-    """Tests for wp_spline_spread launcher."""
+class TestSplineSpread:
+    """Tests for spline_spread launcher."""
 
     @pytest.mark.parametrize("order", [2, 3, 4])
     def test_spread_runs_without_error(self, device, simple_system, order):
@@ -151,9 +151,7 @@ class TestWpSplineSpread:
         )
         mesh = wp.zeros(simple_system["mesh_dims"], dtype=wp.float64, device=device)
 
-        wp_spline_spread(
-            positions, charges, cell_inv_t, order, mesh, wp.float64, device
-        )
+        spline_spread(positions, charges, cell_inv_t, order, mesh, wp.float64, device)
         wp.synchronize()
 
         # Verify output is non-zero
@@ -173,7 +171,7 @@ class TestWpSplineSpread:
         )
         mesh = wp.zeros(simple_system["mesh_dims"], dtype=wp.float64, device=device)
 
-        wp_spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float64, device)
+        spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float64, device)
         wp.synchronize()
 
         mesh_sum = mesh.numpy().sum()
@@ -191,15 +189,15 @@ class TestWpSplineSpread:
         cell_inv_t = wp.from_numpy(cell_inv_t_np, dtype=wp.mat33f, device=device)
         mesh = wp.zeros((16, 16, 16), dtype=wp.float32, device=device)
 
-        wp_spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float32, device)
+        spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float32, device)
         wp.synchronize()
 
         mesh_sum = mesh.numpy().sum()
         assert mesh_sum == pytest.approx(1.0, rel=1e-5)
 
 
-class TestWpSplineGather:
-    """Tests for wp_spline_gather launcher."""
+class TestSplineGather:
+    """Tests for spline_gather launcher."""
 
     def test_gather_runs_without_error(self, device, simple_system):
         """Verify gather kernel runs without error."""
@@ -214,7 +212,7 @@ class TestWpSplineGather:
         mesh = wp.full(simple_system["mesh_dims"], 1.0, dtype=wp.float64, device=device)
         output = wp.zeros(4, dtype=wp.float64, device=device)
 
-        wp_spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
+        spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
         wp.synchronize()
 
         output_np = output.numpy()
@@ -235,14 +233,12 @@ class TestWpSplineGather:
 
         # Spread unit charges
         mesh = wp.zeros(simple_system["mesh_dims"], dtype=wp.float64, device=device)
-        wp_spline_spread(
-            positions, unit_charges, cell_inv_t, 4, mesh, wp.float64, device
-        )
+        spline_spread(positions, unit_charges, cell_inv_t, 4, mesh, wp.float64, device)
         wp.synchronize()
 
         # Gather back
         output = wp.zeros(4, dtype=wp.float64, device=device)
-        wp_spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
+        spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
         wp.synchronize()
 
         output_np = output.numpy()
@@ -252,8 +248,8 @@ class TestWpSplineGather:
         assert output_np.sum() > 0, "Total gathered should be positive"
 
 
-class TestWpSplineGatherVec3:
-    """Tests for wp_spline_gather_vec3 launcher."""
+class TestSplineGatherVec3:
+    """Tests for spline_gather_vec3 launcher."""
 
     def test_gather_vec3_uniform_mesh(self, device, simple_system):
         """Test vec3 gather from uniform vector field."""
@@ -276,7 +272,7 @@ class TestWpSplineGatherVec3:
         vec_mesh = vec_mesh.reshape(simple_system["mesh_dims"])
 
         output = wp.zeros(4, dtype=wp.vec3d, device=device)
-        wp_spline_gather_vec3(
+        spline_gather_vec3(
             positions, charges, cell_inv_t, 4, vec_mesh, output, wp.float64, device
         )
         wp.synchronize()
@@ -291,8 +287,8 @@ class TestWpSplineGatherVec3:
         assert output_np == pytest.approx(expected_ratios, rel=1e-6)
 
 
-class TestWpSplineGatherGradient:
-    """Tests for wp_spline_gather_gradient launcher."""
+class TestSplineGatherGradient:
+    """Tests for spline_gather_gradient launcher."""
 
     def test_gradient_uniform_mesh(self, device, simple_system):
         """Test gradient gather from uniform potential mesh."""
@@ -310,7 +306,7 @@ class TestWpSplineGatherGradient:
         mesh = wp.full(simple_system["mesh_dims"], 1.0, dtype=wp.float64, device=device)
         forces = wp.zeros(4, dtype=wp.vec3d, device=device)
 
-        wp_spline_gather_gradient(
+        spline_gather_gradient(
             positions, charges, cell_inv_t, 4, mesh, forces, wp.float64, device
         )
         wp.synchronize()
@@ -326,8 +322,8 @@ class TestWpSplineGatherGradient:
 # =============================================================================
 
 
-class TestWpBatchSplineSpread:
-    """Tests for wp_batch_spline_spread launcher."""
+class TestBatchSplineSpread:
+    """Tests for batch_spline_spread launcher."""
 
     def test_batch_spread_runs_without_error(self, device, batch_system):
         """Verify batch spread kernel runs without error."""
@@ -349,7 +345,7 @@ class TestWpBatchSplineSpread:
             device=device,
         )
 
-        wp_batch_spline_spread(
+        batch_spline_spread(
             positions, charges, batch_idx, cell_inv_t, 4, mesh, wp.float64, device
         )
         wp.synchronize()
@@ -377,7 +373,7 @@ class TestWpBatchSplineSpread:
             device=device,
         )
 
-        wp_batch_spline_spread(
+        batch_spline_spread(
             positions, charges, batch_idx, cell_inv_t, 4, mesh, wp.float64, device
         )
         wp.synchronize()
@@ -393,8 +389,8 @@ class TestWpBatchSplineSpread:
         assert sys1_sum == pytest.approx(0.0, abs=1e-8)
 
 
-class TestWpBatchSplineGather:
-    """Tests for wp_batch_spline_gather launcher."""
+class TestBatchSplineGather:
+    """Tests for batch_spline_gather launcher."""
 
     def test_batch_gather_runs_without_error(self, device, batch_system):
         """Verify batch gather kernel runs without error."""
@@ -415,7 +411,7 @@ class TestWpBatchSplineGather:
         )
         output = wp.zeros(4, dtype=wp.float64, device=device)
 
-        wp_batch_spline_gather(
+        batch_spline_gather(
             positions, batch_idx, cell_inv_t, 4, mesh, output, wp.float64, device
         )
         wp.synchronize()
@@ -424,8 +420,8 @@ class TestWpBatchSplineGather:
         assert np.all(output_np > 0), "Batch gather output should be positive"
 
 
-class TestWpBatchSplineGatherVec3:
-    """Tests for wp_batch_spline_gather_vec3 launcher."""
+class TestBatchSplineGatherVec3:
+    """Tests for batch_spline_gather_vec3 launcher."""
 
     def test_batch_gather_vec3_uniform_mesh(self, device, batch_system):
         """Test batch vec3 gather from uniform vector field."""
@@ -453,7 +449,7 @@ class TestWpBatchSplineGatherVec3:
         )
 
         output = wp.zeros(4, dtype=wp.vec3d, device=device)
-        wp_batch_spline_gather_vec3(
+        batch_spline_gather_vec3(
             positions,
             charges,
             batch_idx,
@@ -480,8 +476,8 @@ class TestWpBatchSplineGatherVec3:
         assert output_np == pytest.approx(expected, rel=1e-6)
 
 
-class TestWpBatchSplineGatherGradient:
-    """Tests for wp_batch_spline_gather_gradient launcher."""
+class TestBatchSplineGatherGradient:
+    """Tests for batch_spline_gather_gradient launcher."""
 
     def test_batch_gradient_uniform_mesh(self, device, batch_system):
         """Test batch gradient gather from uniform potential mesh."""
@@ -507,7 +503,7 @@ class TestWpBatchSplineGatherGradient:
         )
         forces = wp.zeros(4, dtype=wp.vec3d, device=device)
 
-        wp_batch_spline_gather_gradient(
+        batch_spline_gather_gradient(
             positions,
             charges,
             batch_idx,
@@ -537,7 +533,7 @@ class TestSplineRegressionValues:
     """
 
     def test_spread_regression(self, device, simple_system):
-        """Regression test for wp_spline_spread with expected values."""
+        """Regression test for spline_spread with expected values."""
         positions = wp.from_numpy(
             simple_system["positions"], dtype=wp.vec3d, device=device
         )
@@ -549,7 +545,7 @@ class TestSplineRegressionValues:
         )
         mesh = wp.zeros(simple_system["mesh_dims"], dtype=wp.float64, device=device)
 
-        wp_spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float64, device)
+        spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float64, device)
         wp.synchronize()
 
         mesh_np = mesh.numpy()
@@ -561,7 +557,7 @@ class TestSplineRegressionValues:
         assert np.count_nonzero(mesh_np) == 182
 
     def test_gather_regression(self, device, simple_system):
-        """Regression test for wp_spline_gather with expected values."""
+        """Regression test for spline_gather with expected values."""
         positions = wp.from_numpy(
             simple_system["positions"], dtype=wp.vec3d, device=device
         )
@@ -574,13 +570,11 @@ class TestSplineRegressionValues:
 
         # Spread then gather
         mesh = wp.zeros(simple_system["mesh_dims"], dtype=wp.float64, device=device)
-        wp_spline_spread(
-            positions, unit_charges, cell_inv_t, 4, mesh, wp.float64, device
-        )
+        spline_spread(positions, unit_charges, cell_inv_t, 4, mesh, wp.float64, device)
         wp.synchronize()
 
         output = wp.zeros(4, dtype=wp.float64, device=device)
-        wp_spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
+        spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
         wp.synchronize()
 
         output_np = output.numpy()
@@ -591,7 +585,7 @@ class TestSplineRegressionValues:
         assert output_np.sum() == pytest.approx(0.4592409390, rel=1e-8)
 
     def test_gather_vec3_regression(self, device, simple_system):
-        """Regression test for wp_spline_gather_vec3 with expected values."""
+        """Regression test for spline_gather_vec3 with expected values."""
         positions = wp.from_numpy(
             simple_system["positions"], dtype=wp.vec3d, device=device
         )
@@ -610,7 +604,7 @@ class TestSplineRegressionValues:
         vec_mesh = vec_mesh.reshape(simple_system["mesh_dims"])
 
         output = wp.zeros(4, dtype=wp.vec3d, device=device)
-        wp_spline_gather_vec3(
+        spline_gather_vec3(
             positions, charges, cell_inv_t, 4, vec_mesh, output, wp.float64, device
         )
         wp.synchronize()
@@ -629,7 +623,7 @@ class TestSplineRegressionValues:
         assert output_np == pytest.approx(expected, rel=1e-6)
 
     def test_batch_spread_regression(self, device, batch_system):
-        """Regression test for wp_batch_spline_spread with expected values."""
+        """Regression test for batch_spline_spread with expected values."""
         positions = wp.from_numpy(
             batch_system["positions"], dtype=wp.vec3d, device=device
         )
@@ -648,7 +642,7 @@ class TestSplineRegressionValues:
             device=device,
         )
 
-        wp_batch_spline_spread(
+        batch_spline_spread(
             positions, charges, batch_idx, cell_inv_t, 4, mesh, wp.float64, device
         )
         wp.synchronize()
@@ -662,7 +656,7 @@ class TestSplineRegressionValues:
         assert mesh_np.min() == pytest.approx(-0.1481481481, rel=1e-8)
 
     def test_batch_gather_regression(self, device, batch_system):
-        """Regression test for wp_batch_spline_gather with expected values."""
+        """Regression test for batch_spline_gather with expected values."""
         positions = wp.from_numpy(
             batch_system["positions"], dtype=wp.vec3d, device=device
         )
@@ -682,13 +676,13 @@ class TestSplineRegressionValues:
             dtype=wp.float64,
             device=device,
         )
-        wp_batch_spline_spread(
+        batch_spline_spread(
             positions, unit_charges, batch_idx, cell_inv_t, 4, mesh, wp.float64, device
         )
         wp.synchronize()
 
         output = wp.zeros(4, dtype=wp.float64, device=device)
-        wp_batch_spline_gather(
+        batch_spline_gather(
             positions, batch_idx, cell_inv_t, 4, mesh, output, wp.float64, device
         )
         wp.synchronize()
@@ -720,9 +714,7 @@ class TestBSplineProperties:
         cell_inv_t = wp.from_numpy(cell_inv_t_np, dtype=wp.mat33d, device=device)
 
         mesh = wp.zeros((16, 16, 16), dtype=wp.float64, device=device)
-        wp_spline_spread(
-            positions, charges, cell_inv_t, order, mesh, wp.float64, device
-        )
+        spline_spread(positions, charges, cell_inv_t, order, mesh, wp.float64, device)
         wp.synchronize()
 
         mesh_sum = mesh.numpy().sum()
@@ -743,7 +735,7 @@ class TestBSplineProperties:
         cell_inv_t = wp.from_numpy(cell_inv_t_np, dtype=wp.mat33d, device=device)
 
         mesh = wp.zeros((16, 16, 16), dtype=wp.float64, device=device)
-        wp_spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float64, device)
+        spline_spread(positions, charges, cell_inv_t, 4, mesh, wp.float64, device)
         wp.synchronize()
 
         mesh_sum = mesh.numpy().sum()
@@ -762,7 +754,7 @@ class TestBSplineProperties:
         mesh = wp.full((16, 16, 16), 1.0, dtype=wp.float64, device=device)
         output = wp.zeros(1, dtype=wp.float64, device=device)
 
-        wp_spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
+        spline_gather(positions, cell_inv_t, 4, mesh, output, wp.float64, device)
         wp.synchronize()
 
         # Weights should sum to 1.0
@@ -783,7 +775,7 @@ class TestBSplineProperties:
         mesh = wp.full((16, 16, 16), 5.0, dtype=wp.float64, device=device)
         forces = wp.zeros(5, dtype=wp.vec3d, device=device)
 
-        wp_spline_gather_gradient(
+        spline_gather_gradient(
             positions, charges, cell_inv_t, 4, mesh, forces, wp.float64, device
         )
         wp.synchronize()

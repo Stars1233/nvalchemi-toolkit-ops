@@ -34,7 +34,7 @@ gto
 spline
     B-spline interpolation kernels for mesh-based calculations (e.g., PME).
     Provides spread, gather, and gradient operations with framework-agnostic
-    Warp kernels and wp_* launcher functions.
+    Warp kernels and launcher functions.
 """
 
 from .math import (
@@ -128,15 +128,15 @@ __all__ = [
     "compute_fractional_coords",
     "bspline_grid_offset",
     "wrap_grid_index",
-    # B-spline Warp launchers (wp_*)
-    "wp_spline_spread",
-    "wp_spline_gather",
-    "wp_spline_gather_vec3",
-    "wp_spline_gather_gradient",
-    "wp_batch_spline_spread",
-    "wp_batch_spline_gather",
-    "wp_batch_spline_gather_vec3",
-    "wp_batch_spline_gather_gradient",
+    # B-spline Warp launchers
+    "spline_spread",
+    "spline_gather",
+    "spline_gather_vec3",
+    "spline_gather_gradient",
+    "batch_spline_spread",
+    "batch_spline_gather",
+    "batch_spline_gather_vec3",
+    "batch_spline_gather_gradient",
 ]
 
 from .gto import (
@@ -162,6 +162,11 @@ from .gto import (
     gto_self_overlap,
 )
 from .spline import (
+    # Warp launchers
+    batch_spline_gather,
+    batch_spline_gather_gradient,
+    batch_spline_gather_vec3,
+    batch_spline_spread,
     # Warp functions (@wp.func)
     bspline_derivative,
     bspline_grid_offset,
@@ -169,14 +174,9 @@ from .spline import (
     bspline_weight_3d,
     bspline_weight_gradient_3d,
     compute_fractional_coords,
-    # Warp launchers (wp_*)
-    wp_batch_spline_gather,
-    wp_batch_spline_gather_gradient,
-    wp_batch_spline_gather_vec3,
-    wp_batch_spline_spread,
-    wp_spline_gather,
-    wp_spline_gather_gradient,
-    wp_spline_gather_vec3,
-    wp_spline_spread,
+    spline_gather,
+    spline_gather_gradient,
+    spline_gather_vec3,
+    spline_spread,
     wrap_grid_index,
 )

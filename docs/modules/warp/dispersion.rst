@@ -23,5 +23,5 @@ The DFT-D3 implementation supports two neighbor representation formats:
 Both formats produce identical results and support all features including periodic
 boundary conditions, batching, and smooth cutoff functions.
 
-.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.wp_dftd3_nm
-.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.wp_dftd3_nl
+.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3_nm
+.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3_nl

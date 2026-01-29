@@ -21,14 +21,14 @@ Coulomb Kernels
 
 Direct pairwise Coulomb interactions.
 
-.. autofunction:: wp_coulomb_energy
-.. autofunction:: wp_coulomb_energy_forces
-.. autofunction:: wp_coulomb_energy_matrix
-.. autofunction:: wp_coulomb_energy_forces_matrix
-.. autofunction:: wp_batch_coulomb_energy
-.. autofunction:: wp_batch_coulomb_energy_forces
-.. autofunction:: wp_batch_coulomb_energy_matrix
-.. autofunction:: wp_batch_coulomb_energy_forces_matrix
+.. autofunction:: coulomb_energy
+.. autofunction:: coulomb_energy_forces
+.. autofunction:: coulomb_energy_matrix
+.. autofunction:: coulomb_energy_forces_matrix
+.. autofunction:: batch_coulomb_energy
+.. autofunction:: batch_coulomb_energy_forces
+.. autofunction:: batch_coulomb_energy_matrix
+.. autofunction:: batch_coulomb_energy_forces_matrix
 
 Ewald Kernels
 ^^^^^^^^^^^^^
@@ -37,25 +37,25 @@ Ewald summation kernels for real-space and reciprocal-space.
 
 **Real-Space:**
 
-.. autofunction:: wp_ewald_real_space_energy
-.. autofunction:: wp_ewald_real_space_energy_forces
-.. autofunction:: wp_ewald_real_space_energy_matrix
-.. autofunction:: wp_ewald_real_space_energy_forces_matrix
-.. autofunction:: wp_batch_ewald_real_space_energy
-.. autofunction:: wp_batch_ewald_real_space_energy_forces
-.. autofunction:: wp_batch_ewald_real_space_energy_matrix
-.. autofunction:: wp_batch_ewald_real_space_energy_forces_matrix
+.. autofunction:: ewald_real_space_energy
+.. autofunction:: ewald_real_space_energy_forces
+.. autofunction:: ewald_real_space_energy_matrix
+.. autofunction:: ewald_real_space_energy_forces_matrix
+.. autofunction:: batch_ewald_real_space_energy
+.. autofunction:: batch_ewald_real_space_energy_forces
+.. autofunction:: batch_ewald_real_space_energy_matrix
+.. autofunction:: batch_ewald_real_space_energy_forces_matrix
 
 **Reciprocal-Space:**
 
-.. autofunction:: wp_ewald_reciprocal_space_fill_structure_factors
-.. autofunction:: wp_ewald_reciprocal_space_compute_energy
-.. autofunction:: wp_ewald_subtract_self_energy
-.. autofunction:: wp_ewald_reciprocal_space_energy_forces
-.. autofunction:: wp_batch_ewald_reciprocal_space_fill_structure_factors
-.. autofunction:: wp_batch_ewald_reciprocal_space_compute_energy
-.. autofunction:: wp_batch_ewald_subtract_self_energy
-.. autofunction:: wp_batch_ewald_reciprocal_space_energy_forces
+.. autofunction:: ewald_reciprocal_space_fill_structure_factors
+.. autofunction:: ewald_reciprocal_space_compute_energy
+.. autofunction:: ewald_subtract_self_energy
+.. autofunction:: ewald_reciprocal_space_energy_forces
+.. autofunction:: batch_ewald_reciprocal_space_fill_structure_factors
+.. autofunction:: batch_ewald_reciprocal_space_compute_energy
+.. autofunction:: batch_ewald_subtract_self_energy
+.. autofunction:: batch_ewald_reciprocal_space_energy_forces
 
 PME Kernels
 ^^^^^^^^^^^
@@ -69,9 +69,9 @@ Particle Mesh Ewald kernels. Note that FFT operations are typically offloaded to
    For this reason, the ``warp`` kernel set cannot be run completely end-to-end
    in the same way as the other kernels can be. See the PyTorch bindings instead.
 
-.. autofunction:: wp_pme_green_structure_factor
-.. autofunction:: wp_batch_pme_green_structure_factor
-.. autofunction:: wp_pme_energy_corrections
-.. autofunction:: wp_pme_energy_corrections_with_charge_grad
-.. autofunction:: wp_batch_pme_energy_corrections
-.. autofunction:: wp_batch_pme_energy_corrections_with_charge_grad
+.. autofunction:: pme_green_structure_factor
+.. autofunction:: batch_pme_green_structure_factor
+.. autofunction:: pme_energy_corrections
+.. autofunction:: pme_energy_corrections_with_charge_grad
+.. autofunction:: batch_pme_energy_corrections
+.. autofunction:: batch_pme_energy_corrections_with_charge_grad

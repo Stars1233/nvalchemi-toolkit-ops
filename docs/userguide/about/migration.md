@@ -30,6 +30,8 @@ use the non-torch namespaces:
 
 - `nvalchemiops.neighbors` - Warp neighbor list kernels
 - `nvalchemiops.interactions.dispersion` - Warp dispersion kernels
+- `nvalchemiops.interactions.electrostatics` - Warp electrostatics kernels
+- `nvalchemiops.math` - Warp math and spline kernels
 
-These modules export functions prefixed with `wp_` (e.g., `wp_dftd3_nm`,
-`wp_build_cell_list`).
+These modules comprise both targeted kernels as well as end-to-end launchers where
+possible, which run the full workflow based on `warp.array`s.
