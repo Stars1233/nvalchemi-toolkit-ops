@@ -15,7 +15,7 @@
 """
 Core warp launcher tests for DFT-D3 implementation.
 
-This test suite focuses on the core warp launchers (wp_dftd3_nm, wp_dftd3_nl)
+This test suite focuses on the core warp launchers (dftd3_nm, dftd3_nl)
 and includes:
 - S5 switching function tests
 - Warp launcher interface tests
@@ -35,13 +35,48 @@ import warp as wp
 
 from nvalchemiops.interactions.dispersion._dftd3 import (
     _s5_switch,
-    wp_dftd3_nm,
+    dftd3_nl,
+    dftd3_nm,
 )
 from test.interactions.dispersion.conftest import from_warp, to_warp
 
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
+
+
+def neighbor_matrix_to_csr(
+    nbmat: np.ndarray, fill_value: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert neighbor matrix format to CSR (Compressed Sparse Row) format.
+
+    Parameters
+    ----------
+    nbmat : np.ndarray, shape [num_atoms, max_neighbors]
+        Neighbor matrix with padding
+    fill_value : int
+        Value used for padding (typically num_atoms)
+
+    Returns
+    -------
+    idx_j : np.ndarray
+        Flat array of neighbor indices
+    neighbor_ptr : np.ndarray, shape [num_atoms + 1]
+        CSR row pointers
+    """
+    num_atoms = nbmat.shape[0]
+    neighbor_ptr = np.zeros(num_atoms + 1, dtype=np.int32)
+    idx_j_list = []
+
+    for i in range(num_atoms):
+        neighbors = nbmat[i]
+        valid_neighbors = neighbors[neighbors < fill_value]
+        idx_j_list.extend(valid_neighbors.tolist())
+        neighbor_ptr[i + 1] = neighbor_ptr[i] + len(valid_neighbors)
+
+    idx_j = np.array(idx_j_list, dtype=np.int32)
+    return idx_j, neighbor_ptr
 
 
 def run_dftd3_nm(
@@ -53,7 +88,7 @@ def run_dftd3_nm(
     vec_dtype=wp.vec3f,
 ) -> dict:
     """
-    Run wp_dftd3_nm warp launcher for a system.
+    Run dftd3_nm warp launcher for a system.
 
     Parameters
     ----------
@@ -118,10 +153,121 @@ def run_dftd3_nm(
     virial_wp = wp.zeros(num_systems, dtype=wp.mat33f, device=device)
 
     # Call warp launcher
-    wp_dftd3_nm(
+    dftd3_nm(
         positions=positions,
         numbers=numbers_wp,
         neighbor_matrix=neighbor_matrix_wp,
+        covalent_radii=rcov_wp,
+        r4r2=r4r2_wp,
+        c6_reference=c6_reference_wp,
+        coord_num_ref=coord_num_ref_wp,
+        a1=functional_params["a1"],
+        a2=functional_params["a2"],
+        s8=functional_params["s8"],
+        coord_num=coord_num_wp,
+        forces=forces_wp,
+        energy=energy_wp,
+        virial=virial_wp,
+        vec_dtype=vec_dtype,
+        k1=functional_params["k1"],
+        k3=functional_params["k3"],
+        s6=functional_params["s6"],
+        batch_idx=batch_idx_wp,
+        device=device,
+    )
+
+    # Convert back to numpy
+    return {
+        "energy": from_warp(energy_wp),
+        "forces": from_warp(forces_wp),
+        "coord_num": from_warp(coord_num_wp),
+    }
+
+
+def run_dftd3_nl(
+    system: dict,
+    element_tables: dict,
+    functional_params: dict,
+    device: str,
+    batch_indices: np.ndarray | None = None,
+    vec_dtype=wp.vec3f,
+) -> dict:
+    """
+    Run dftd3_nl warp launcher for a system (neighbor list / CSR format).
+
+    Parameters
+    ----------
+    system : dict
+        System with 'coord', 'numbers', 'nbmat', 'B', 'M' (numpy arrays)
+    element_tables : dict
+        Element parameters (numpy arrays)
+    functional_params : dict
+        Functional parameters (k1, k3, a1, a2, s6, s8)
+    device : str
+        Warp device string
+    batch_indices : np.ndarray or None
+        Batch indices for atoms
+    vec_dtype : warp dtype
+        Vector dtype (wp.vec3f or wp.vec3d)
+
+    Returns
+    -------
+    dict
+        Results with 'energy', 'forces', 'coord_num' (numpy arrays)
+    """
+    # Extract system data (now numpy arrays)
+    B = system["B"]
+    coord_flat = system["coord"]
+    numbers = system["numbers"]
+    nbmat = system["nbmat"]
+
+    # Convert neighbor matrix to CSR format
+    fill_value = B
+    idx_j, neighbor_ptr = neighbor_matrix_to_csr(nbmat, fill_value)
+
+    # Convert to warp arrays
+    positions = to_warp(coord_flat.reshape(B, 3), vec_dtype, device)
+    numbers_wp = to_warp(numbers, wp.int32, device)
+    idx_j_wp = to_warp(idx_j, wp.int32, device)
+    neighbor_ptr_wp = to_warp(neighbor_ptr, wp.int32, device)
+
+    # Prepare element tables as warp arrays
+    scalar_dtype = wp.float32
+    max_z_inc = element_tables["z_max_inc"]
+
+    rcov_wp = to_warp(element_tables["rcov"], scalar_dtype, device)
+    r4r2_wp = to_warp(element_tables["r4r2"], scalar_dtype, device)
+    c6_reference_wp = to_warp(
+        element_tables["c6ref"].reshape(max_z_inc, max_z_inc, 5, 5),
+        scalar_dtype,
+        device,
+    )
+    coord_num_ref_wp = to_warp(
+        element_tables["cnref_i"].reshape(max_z_inc, max_z_inc, 5, 5),
+        scalar_dtype,
+        device,
+    )
+
+    # Determine number of systems
+    if batch_indices is not None:
+        batch_idx_wp = to_warp(batch_indices, wp.int32, device)
+        num_systems = int(batch_indices.max()) + 1
+    else:
+        batch_idx_wp = wp.zeros(B, dtype=wp.int32, device=device)
+        num_systems = 1
+
+    # Allocate outputs (pre-zeroed)
+    coord_num_wp = wp.zeros(B, dtype=wp.float32, device=device)
+    forces_wp = wp.zeros(B, dtype=wp.vec3f, device=device)
+    energy_wp = wp.zeros(num_systems, dtype=wp.float32, device=device)
+    virial_wp = wp.zeros(num_systems, dtype=wp.mat33f, device=device)
+
+    # Call warp launcher
+    dftd3_nl(
+        positions=positions,
+        numbers=numbers_wp,
+        idx_j=idx_j_wp,
+        neighbor_ptr=neighbor_ptr_wp,
         covalent_radii=rcov_wp,
         r4r2=r4r2_wp,
         c6_reference=c6_reference_wp,
@@ -246,7 +392,7 @@ class TestS5Switch:
 
 
 class TestWarpLauncherNeighborMatrix:
-    """Test wp_dftd3_nm warp launcher interface."""
+    """Test dftd3_nm warp launcher interface."""
 
     @pytest.mark.usefixtures("h2_system", "element_tables", "device")
     def test_basic_h2(self, request):
@@ -345,7 +491,7 @@ class TestWarpLauncherNeighborMatrix:
         batch_idx_wp = wp.zeros(0, dtype=wp.int32, device=device)
 
         # Should not crash with empty system
-        wp_dftd3_nm(
+        dftd3_nm(
             positions=positions_wp,
             numbers=numbers_wp,
             neighbor_matrix=neighbor_matrix_wp,
@@ -738,3 +884,428 @@ class TestShapes:
 
         # Forces should be float32
         assert results["forces"].dtype == np.float32
+
+
+# ==============================================================================
+# Warp Launcher Neighbor List Tests
+# ==============================================================================
+
+
+class TestWarpLauncherNeighborList:
+    """Test dftd3_nl warp launcher interface (CSR neighbor list format)."""
+
+    @pytest.mark.usefixtures("h2_system", "element_tables", "device")
+    def test_basic_h2(self, request):
+        """Test basic H2 system with neighbor list format."""
+        h2_system = request.getfixturevalue("h2_system")
+        element_tables = request.getfixturevalue("element_tables")
+        device = request.getfixturevalue("device")
+
+        functional_params = {
+            "a1": 0.4,
+            "a2": 4.0,
+            "s6": 1.0,
+            "s8": 0.8,
+            "k1": 16.0,
+            "k3": -4.0,
+        }
+
+        results = run_dftd3_nl(h2_system, element_tables, functional_params, device)
+
+        # Basic checks
+        assert results["energy"].shape == (1,)
+        assert results["forces"].shape == (2, 3)
+        assert results["coord_num"].shape == (2,)
+        assert np.isfinite(results["energy"]).all()
+        assert np.isfinite(results["forces"]).all()
+        assert np.isfinite(results["coord_num"]).all()
+
+        # Energy should be negative (attractive dispersion)
+        assert results["energy"][0] < 0.0
+
+        # Forces should be opposite for symmetric system
+        np.testing.assert_allclose(
+            results["forces"][0], -results["forces"][1], rtol=1e-5, atol=1e-7
+        )
+
+    @pytest.mark.parametrize("vec_dtype", [wp.vec3f, wp.vec3d])
+    @pytest.mark.usefixtures("h2_system", "element_tables", "device")
+    def test_dtype_support(self, request, vec_dtype):
+        """Test that both float32 and float64 precision are supported."""
+        h2_system = request.getfixturevalue("h2_system")
+        element_tables = request.getfixturevalue("element_tables")
+        device = request.getfixturevalue("device")
+
+        functional_params = {
+            "a1": 0.4,
+            "a2": 4.0,
+            "s6": 1.0,
+            "s8": 0.8,
+            "k1": 16.0,
+            "k3": -4.0,
+        }
+
+        results = run_dftd3_nl(
+            h2_system,
+            element_tables,
+            functional_params,
+            device,
+            vec_dtype=vec_dtype,
+        )
+
+        # Should produce finite results for both precisions
+        assert np.isfinite(results["energy"]).all()
+        assert np.isfinite(results["forces"]).all()
+        assert np.isfinite(results["coord_num"]).all()
+
+    @pytest.mark.usefixtures("element_tables", "device")
+    def test_empty_system(self, request):
+        """Test handling of empty system."""
+        element_tables = request.getfixturevalue("element_tables")
+        device = request.getfixturevalue("device")
+
+        # Empty system should be handled gracefully
+        # Note: We test this directly without the helper
+        positions_wp = wp.zeros((0, 3), dtype=wp.vec3f, device=device)
+        numbers_wp = wp.zeros(0, dtype=wp.int32, device=device)
+        idx_j_wp = wp.zeros(0, dtype=wp.int32, device=device)
+        neighbor_ptr_wp = wp.array([0], dtype=wp.int32, device=device)
+
+        max_z_inc = element_tables["z_max_inc"]
+        rcov_wp = to_warp(element_tables["rcov"], wp.float32, device)
+        r4r2_wp = to_warp(element_tables["r4r2"], wp.float32, device)
+        c6_reference_wp = to_warp(
+            element_tables["c6ref"].reshape(max_z_inc, max_z_inc, 5, 5),
+            wp.float32,
+            device,
+        )
+        coord_num_ref_wp = to_warp(
+            element_tables["cnref_i"].reshape(max_z_inc, max_z_inc, 5, 5),
+            wp.float32,
+            device,
+        )
+
+        coord_num_wp = wp.zeros(0, dtype=wp.float32, device=device)
+        forces_wp = wp.zeros(0, dtype=wp.vec3f, device=device)
+        energy_wp = wp.zeros(1, dtype=wp.float32, device=device)
+        virial_wp = wp.zeros(1, dtype=wp.mat33f, device=device)
+        batch_idx_wp = wp.zeros(0, dtype=wp.int32, device=device)
+
+        # Should not crash with empty system
+        dftd3_nl(
+            positions=positions_wp,
+            numbers=numbers_wp,
+            idx_j=idx_j_wp,
+            neighbor_ptr=neighbor_ptr_wp,
+            covalent_radii=rcov_wp,
+            r4r2=r4r2_wp,
+            c6_reference=c6_reference_wp,
+            coord_num_ref=coord_num_ref_wp,
+            a1=0.4,
+            a2=4.0,
+            s8=0.8,
+            coord_num=coord_num_wp,
+            forces=forces_wp,
+            energy=energy_wp,
+            virial=virial_wp,
+            vec_dtype=wp.vec3f,
+            batch_idx=batch_idx_wp,
+            device=device,
+        )
+
+        energy = from_warp(energy_wp)
+        assert energy[0] == pytest.approx(0.0)
+
+
+# ==============================================================================
+# Neighbor Format Consistency Tests
+# ==============================================================================
+
+
+class TestNeighborFormatConsistency:
+    """Test that neighbor matrix and neighbor list formats produce identical results."""
+
+    @pytest.mark.usefixtures("h2_system", "element_tables", "device")
+    def test_nm_nl_consistency_h2(self, request):
+        """Test that dftd3_nm and dftd3_nl produce identical results for H2."""
+        h2_system = request.getfixturevalue("h2_system")
+        element_tables = request.getfixturevalue("element_tables")
+        device = request.getfixturevalue("device")
+
+        functional_params = {
+            "a1": 0.4,
+            "a2": 4.0,
+            "s6": 1.0,
+            "s8": 0.8,
+            "k1": 16.0,
+            "k3": -4.0,
+        }
+
+        # Run both methods
+        results_nm = run_dftd3_nm(h2_system, element_tables, functional_params, device)
+        results_nl = run_dftd3_nl(h2_system, element_tables, functional_params, device)
+
+        # Compare outputs - should be identical
+        np.testing.assert_allclose(
+            results_nl["energy"],
+            results_nm["energy"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Energy differs between neighbor matrix and neighbor list formats",
+        )
+        np.testing.assert_allclose(
+            results_nl["forces"],
+            results_nm["forces"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Forces differ between neighbor matrix and neighbor list formats",
+        )
+        np.testing.assert_allclose(
+            results_nl["coord_num"],
+            results_nm["coord_num"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Coordination numbers differ between neighbor matrix and neighbor list formats",
+        )
+
+    @pytest.mark.usefixtures(
+        "ne2_system", "element_tables", "functional_params", "device"
+    )
+    def test_nm_nl_consistency_ne2(self, request):
+        """Test that dftd3_nm and dftd3_nl produce identical results for Ne2."""
+        ne2_system = request.getfixturevalue("ne2_system")
+        element_tables = request.getfixturevalue("element_tables")
+        functional_params = request.getfixturevalue("functional_params")
+        device = request.getfixturevalue("device")
+
+        # Run both methods
+        results_nm = run_dftd3_nm(ne2_system, element_tables, functional_params, device)
+        results_nl = run_dftd3_nl(ne2_system, element_tables, functional_params, device)
+
+        # Compare outputs - should be identical
+        np.testing.assert_allclose(
+            results_nl["energy"],
+            results_nm["energy"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Energy differs between neighbor matrix and neighbor list formats",
+        )
+        np.testing.assert_allclose(
+            results_nl["forces"],
+            results_nm["forces"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Forces differ between neighbor matrix and neighbor list formats",
+        )
+        np.testing.assert_allclose(
+            results_nl["coord_num"],
+            results_nm["coord_num"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Coordination numbers differ between neighbor matrix and neighbor list formats",
+        )
+
+    @pytest.mark.usefixtures(
+        "hcl_dimer_system", "element_tables", "functional_params", "device"
+    )
+    def test_nm_nl_consistency_hcl_dimer(self, request):
+        """Test that dftd3_nm and dftd3_nl produce identical results for HCl dimer."""
+        hcl_dimer_system = request.getfixturevalue("hcl_dimer_system")
+        element_tables = request.getfixturevalue("element_tables")
+        functional_params = request.getfixturevalue("functional_params")
+        device = request.getfixturevalue("device")
+
+        # Run both methods
+        results_nm = run_dftd3_nm(
+            hcl_dimer_system, element_tables, functional_params, device
+        )
+        results_nl = run_dftd3_nl(
+            hcl_dimer_system, element_tables, functional_params, device
+        )
+
+        # Compare outputs - should be identical
+        np.testing.assert_allclose(
+            results_nl["energy"],
+            results_nm["energy"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Energy differs between neighbor matrix and neighbor list formats",
+        )
+        np.testing.assert_allclose(
+            results_nl["forces"],
+            results_nm["forces"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Forces differ between neighbor matrix and neighbor list formats",
+        )
+        np.testing.assert_allclose(
+            results_nl["coord_num"],
+            results_nm["coord_num"],
+            rtol=1e-6,
+            atol=1e-7,
+            err_msg="Coordination numbers differ between neighbor matrix and neighbor list formats",
+        )
+
+
+# ==============================================================================
+# Regression Tests (Neighbor List)
+# ==============================================================================
+
+
+class TestRegressionNeighborList:
+    """Regression tests for neighbor list format against reference outputs."""
+
+    @pytest.mark.usefixtures(
+        "ne2_system",
+        "element_tables",
+        "functional_params",
+        "device",
+        "ne2_reference_cpu",
+    )
+    def test_ne2_reference_values(
+        self,
+        request,
+    ):
+        """Test Ne2 system against hard-coded reference values using neighbor list format."""
+        ne2_system = request.getfixturevalue("ne2_system")
+        element_tables = request.getfixturevalue("element_tables")
+        functional_params = request.getfixturevalue("functional_params")
+        device = request.getfixturevalue("device")
+        ne2_reference_cpu = request.getfixturevalue("ne2_reference_cpu")
+
+        results = run_dftd3_nl(ne2_system, element_tables, functional_params, device)
+
+        # Compare against reference values from conftest.py
+        reference = ne2_reference_cpu
+
+        # Energy comparison
+        np.testing.assert_allclose(
+            results["energy"],
+            reference["total_energy"],
+            rtol=1e-5,
+            atol=1e-7,
+            err_msg="Energy changed from reference implementation (neighbor list format)",
+        )
+
+        # Coordination number comparison
+        np.testing.assert_allclose(
+            results["coord_num"],
+            reference["cn"],
+            rtol=1e-5,
+            atol=1e-7,
+            err_msg="Coordination numbers changed from reference implementation (neighbor list format)",
+        )
+
+        # Force comparison
+        np.testing.assert_allclose(
+            results["forces"],
+            reference["force"],
+            rtol=1e-5,
+            atol=1e-7,
+            err_msg="Forces changed from reference implementation (neighbor list format)",
+        )
+
+    @pytest.mark.usefixtures(
+        "hcl_dimer_system",
+        "element_tables",
+        "functional_params",
+        "device",
+        "hcl_dimer_reference_cpu",
+    )
+    def test_hcl_dimer_reference_values(
+        self,
+        request,
+    ):
+        """Test HCl dimer system against hard-coded reference values using neighbor list format."""
+        hcl_dimer_system = request.getfixturevalue("hcl_dimer_system")
+        element_tables = request.getfixturevalue("element_tables")
+        functional_params = request.getfixturevalue("functional_params")
+        device = request.getfixturevalue("device")
+        hcl_dimer_reference_cpu = request.getfixturevalue("hcl_dimer_reference_cpu")
+
+        results = run_dftd3_nl(
+            hcl_dimer_system, element_tables, functional_params, device
+        )
+
+        # Compare against reference values from conftest.py
+        reference = hcl_dimer_reference_cpu
+
+        # Energy comparison
+        np.testing.assert_allclose(
+            results["energy"],
+            reference["total_energy"],
+            rtol=1e-5,
+            atol=1e-7,
+            err_msg="Energy changed from reference implementation (neighbor list format)",
+        )
+
+        # Coordination number comparison
+        np.testing.assert_allclose(
+            results["coord_num"],
+            reference["cn"],
+            rtol=1e-5,
+            atol=1e-7,
+            err_msg="Coordination numbers changed from reference implementation (neighbor list format)",
+        )
+
+        # Force comparison
+        np.testing.assert_allclose(
+            results["forces"],
+            reference["force"],
+            rtol=1e-5,
+            atol=1e-7,
+            err_msg="Forces changed from reference implementation (neighbor list format)",
+        )
+
+
+# ==============================================================================
+# CPU/GPU Consistency Tests (Neighbor List)
+# ==============================================================================
+
+
+class TestCPUGPUConsistencyNeighborList:
+    """CPU/GPU consistency tests for neighbor list format."""
+
+    @pytest.mark.parametrize(
+        "system_name",
+        ["ne2_system"],
+    )
+    @pytest.mark.usefixtures("element_tables", "functional_params")
+    def test_consistency(
+        self,
+        system_name,
+        request,
+    ):
+        """Test that neighbor list launcher produces identical results on CPU and GPU."""
+        # Skip if CUDA not available
+        if not wp.is_cuda_available():
+            pytest.skip("CUDA not available")
+
+        system = request.getfixturevalue(system_name)
+        element_tables = request.getfixturevalue("element_tables")
+        functional_params = request.getfixturevalue("functional_params")
+
+        device_cpu = "cpu"
+        device_gpu = "cuda:0"
+
+        # Run on both devices
+        results_cpu = run_dftd3_nl(
+            system, element_tables, functional_params, device_cpu
+        )
+        results_gpu = run_dftd3_nl(
+            system, element_tables, functional_params, device_gpu
+        )
+
+        # Compare outputs
+        np.testing.assert_allclose(
+            results_gpu["energy"], results_cpu["energy"], rtol=1e-6, atol=1e-6
+        )
+        np.testing.assert_allclose(
+            results_gpu["forces"], results_cpu["forces"], rtol=1e-6, atol=1e-6
+        )
+        np.testing.assert_allclose(
+            results_gpu["coord_num"],
+            results_cpu["coord_num"],
+            rtol=1e-6,
+            atol=1e-6,
+        )

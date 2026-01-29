@@ -15,7 +15,7 @@
 """
 Script to generate reference outputs for DFT-D3 tests using the new API.
 
-This script uses the wp_dftd3_nm high-level launcher to compute DFT-D3 dispersion
+This script uses the dftd3_nm high-level launcher to compute DFT-D3 dispersion
 corrections and formats the outputs for copy-paste into conftest.py fixtures.
 
 Usage
@@ -44,7 +44,7 @@ from __future__ import annotations
 import numpy as np
 import warp as wp
 
-from nvalchemiops.interactions.dispersion._dftd3 import wp_dftd3_nm
+from nvalchemiops.interactions.dispersion._dftd3 import dftd3_nm
 
 # ==============================================================================
 # Helper Functions (extracted from pytest fixtures)
@@ -412,7 +412,7 @@ def run_full_pipeline(
     k3 = functional_params["k3"]
 
     # Run DFT-D3 calculation using high-level launcher
-    wp_dftd3_nm(
+    dftd3_nm(
         positions=positions,
         numbers=numbers,
         neighbor_matrix=neighbor_matrix,

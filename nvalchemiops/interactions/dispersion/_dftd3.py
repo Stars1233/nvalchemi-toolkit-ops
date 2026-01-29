@@ -50,12 +50,12 @@ warp arrays directly. These are called by framework-specific wrappers
 .. code-block:: python
 
     from nvalchemiops.interactions.dispersion._dftd3 import (
-        wp_dftd3_nm,
-        wp_dftd3_nl,
+        dftd3_nm,
+        dftd3_nl,
     )
 
     # Neighbor matrix format
-    wp_dftd3_nm(
+    dftd3_nm(
         positions=positions_wp,  # warp array
         numbers=numbers_wp,
         neighbor_matrix=neighbor_matrix_wp,
@@ -71,7 +71,7 @@ warp arrays directly. These are called by framework-specific wrappers
     )
 
     # Neighbor list format (CSR)
-    wp_dftd3_nl(
+    dftd3_nl(
         positions=positions_wp,
         numbers=numbers_wp,
         idx_j=idx_j_wp,
@@ -176,8 +176,8 @@ import warp as wp
 
 __all__ = [
     # Warp launchers (framework-agnostic public API)
-    "wp_dftd3_nm",
-    "wp_dftd3_nl",
+    "dftd3_nm",
+    "dftd3_nl",
     # Kernel overload dictionaries (for framework bindings)
     "_compute_cartesian_shifts_overload",
     "_cn_kernel_nm_overload",
@@ -1646,7 +1646,7 @@ for t, v, m in zip(T, V, M):
 # ==============================================================================
 
 
-def wp_dftd3_nm(
+def dftd3_nm(
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     neighbor_matrix: wp.array2d(dtype=wp.int32),
@@ -1761,7 +1761,7 @@ def wp_dftd3_nm(
 
     See Also
     --------
-    wp_dftd3_nl : Neighbor list (CSR) format variant
+    dftd3_nl : Neighbor list (CSR) format variant
     _compute_cartesian_shifts : Pass 0 kernel
     _cn_kernel_nm : Pass 1 kernel
     _direct_forces_and_dE_dCN_kernel_nm : Pass 2 kernel
@@ -1904,7 +1904,7 @@ def wp_dftd3_nm(
     )
 
 
-def wp_dftd3_nl(
+def dftd3_nl(
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     idx_j: wp.array(dtype=wp.int32),
@@ -2022,7 +2022,7 @@ def wp_dftd3_nl(
 
     See Also
     --------
-    wp_dftd3_nm : Neighbor matrix format variant
+    dftd3_nm : Neighbor matrix format variant
     _compute_cartesian_shifts_nl : Pass 0 kernel
     _cn_kernel_nl : Pass 1 kernel
     _direct_forces_and_dE_dCN_kernel_nl : Pass 2 kernel

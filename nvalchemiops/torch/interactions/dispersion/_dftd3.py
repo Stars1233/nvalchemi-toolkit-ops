@@ -21,8 +21,10 @@ import torch
 import warp as wp
 
 from nvalchemiops.interactions.dispersion._dftd3 import (
-    wp_dftd3_nl,
-    wp_dftd3_nm,
+    dftd3_nl as wp_dftd3_nl,
+)
+from nvalchemiops.interactions.dispersion._dftd3 import (
+    dftd3_nm as wp_dftd3_nm,
 )
 
 __all__ = [
