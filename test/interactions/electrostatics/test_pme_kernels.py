@@ -16,7 +16,7 @@
 """
 Unit tests for PME Warp kernels (framework-agnostic layer).
 
-Tests the wp_* launcher functions in nvalchemiops.interactions.electrostatics.pme_kernels
+Tests the launcher functions in nvalchemiops.interactions.electrostatics.pme_kernels
 directly with wp.array inputs.
 
 Tests cover:
@@ -40,12 +40,12 @@ import pytest
 import warp as wp
 
 from nvalchemiops.interactions.electrostatics.pme_kernels import (
-    wp_batch_pme_energy_corrections,
-    wp_batch_pme_energy_corrections_with_charge_grad,
-    wp_batch_pme_green_structure_factor,
-    wp_pme_energy_corrections,
-    wp_pme_energy_corrections_with_charge_grad,
-    wp_pme_green_structure_factor,
+    batch_pme_energy_corrections,
+    batch_pme_energy_corrections_with_charge_grad,
+    batch_pme_green_structure_factor,
+    pme_energy_corrections,
+    pme_energy_corrections_with_charge_grad,
+    pme_green_structure_factor,
 )
 
 # Mathematical constants
@@ -80,7 +80,7 @@ def get_rtol(wp_dtype: type) -> float:
 
 
 class TestPMEGreenStructureFactor:
-    """Test wp_pme_green_structure_factor kernel."""
+    """Test pme_green_structure_factor kernel."""
 
     def test_green_function_shape(self, device, wp_dtype):
         """Test output shapes are correct."""
@@ -104,7 +104,7 @@ class TestPMEGreenStructureFactor:
         )
 
         # Run kernel
-        wp_pme_green_structure_factor(
+        pme_green_structure_factor(
             k_squared=k_squared,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -156,7 +156,7 @@ class TestPMEGreenStructureFactor:
             (mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device
         )
 
-        wp_pme_green_structure_factor(
+        pme_green_structure_factor(
             k_squared=k_squared,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -209,7 +209,7 @@ class TestPMEGreenStructureFactor:
             (mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device
         )
 
-        wp_pme_green_structure_factor(
+        pme_green_structure_factor(
             k_squared=k_squared,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -274,7 +274,7 @@ class TestPMEGreenStructureFactor:
             (mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device
         )
 
-        wp_pme_green_structure_factor(
+        pme_green_structure_factor(
             k_squared=k_squared,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -330,7 +330,7 @@ class TestPMEGreenStructureFactor:
             (mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device
         )
 
-        wp_pme_green_structure_factor(
+        pme_green_structure_factor(
             k_squared=k_squared,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -362,7 +362,7 @@ class TestPMEGreenStructureFactor:
 
 
 class TestPMEEnergyCorrections:
-    """Test wp_pme_energy_corrections kernel."""
+    """Test pme_energy_corrections kernel."""
 
     def test_energy_corrections_shape(self, device, wp_dtype):
         """Test output shape is correct."""
@@ -375,7 +375,7 @@ class TestPMEEnergyCorrections:
         total_charge = make_scalar_array(0.0, device, wp_dtype)
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -406,7 +406,7 @@ class TestPMEEnergyCorrections:
         total_charge = make_scalar_array(0.0, device, wp_dtype)  # Neutral
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -447,7 +447,7 @@ class TestPMEEnergyCorrections:
         total_charge = make_scalar_array(0.0, device, wp_dtype)
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -484,7 +484,7 @@ class TestPMEEnergyCorrections:
         total_charge = make_scalar_array(0.0, device, wp_dtype)
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -506,7 +506,7 @@ class TestPMEEnergyCorrections:
 
 
 class TestPMEEnergyCorrectionsWithChargeGrad:
-    """Test wp_pme_energy_corrections_with_charge_grad kernel."""
+    """Test pme_energy_corrections_with_charge_grad kernel."""
 
     def test_charge_grad_shape(self, device, wp_dtype):
         """Test output shapes are correct."""
@@ -520,7 +520,7 @@ class TestPMEEnergyCorrectionsWithChargeGrad:
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
         charge_gradients = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_pme_energy_corrections_with_charge_grad(
+        pme_energy_corrections_with_charge_grad(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -554,7 +554,7 @@ class TestPMEEnergyCorrectionsWithChargeGrad:
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
         charge_gradients = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_pme_energy_corrections_with_charge_grad(
+        pme_energy_corrections_with_charge_grad(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -597,7 +597,7 @@ class TestPMEEnergyCorrectionsWithChargeGrad:
 
         # Energy-only kernel
         corrected_energies_only = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -611,7 +611,7 @@ class TestPMEEnergyCorrectionsWithChargeGrad:
         # Energy + gradient kernel
         corrected_energies_grad = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
         charge_gradients = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
-        wp_pme_energy_corrections_with_charge_grad(
+        pme_energy_corrections_with_charge_grad(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -637,7 +637,7 @@ class TestPMEEnergyCorrectionsWithChargeGrad:
 
 
 class TestBatchPMEGreenStructureFactor:
-    """Test wp_batch_pme_green_structure_factor kernel."""
+    """Test batch_pme_green_structure_factor kernel."""
 
     def test_batch_green_function_shape(self, device, wp_dtype):
         """Test batch output shapes are correct."""
@@ -668,7 +668,7 @@ class TestBatchPMEGreenStructureFactor:
             (mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device
         )
 
-        wp_batch_pme_green_structure_factor(
+        batch_pme_green_structure_factor(
             k_squared=k_squared,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -716,7 +716,7 @@ class TestBatchPMEGreenStructureFactor:
         )
         sf_single = wp.zeros((mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device)
 
-        wp_pme_green_structure_factor(
+        pme_green_structure_factor(
             k_squared=k_squared_single,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -747,7 +747,7 @@ class TestBatchPMEGreenStructureFactor:
         )
         sf_batch = wp.zeros((mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device)
 
-        wp_batch_pme_green_structure_factor(
+        batch_pme_green_structure_factor(
             k_squared=k_squared_batch,
             miller_x=miller_x,
             miller_y=miller_y,
@@ -772,7 +772,7 @@ class TestBatchPMEGreenStructureFactor:
 
 
 class TestBatchPMEEnergyCorrections:
-    """Test wp_batch_pme_energy_corrections kernel."""
+    """Test batch_pme_energy_corrections kernel."""
 
     def test_batch_energy_corrections_shape(self, device, wp_dtype):
         """Test batch output shape is correct."""
@@ -796,7 +796,7 @@ class TestBatchPMEEnergyCorrections:
         total_charges = wp.zeros(num_systems, dtype=wp_dtype, device=device)
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_batch_pme_energy_corrections(
+        batch_pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             batch_idx=batch_idx,
@@ -829,7 +829,7 @@ class TestBatchPMEEnergyCorrections:
 
         # Single-system calculations
         corrected1 = wp.zeros(2, dtype=wp_dtype, device=device)
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=wp.array(raw1, dtype=wp_dtype, device=device),
             charges=wp.array(q1, dtype=wp_dtype, device=device),
             volume=make_scalar_array(vol1, device, wp_dtype),
@@ -841,7 +841,7 @@ class TestBatchPMEEnergyCorrections:
         )
 
         corrected2 = wp.zeros(3, dtype=wp_dtype, device=device)
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=wp.array(raw2, dtype=wp_dtype, device=device),
             charges=wp.array(q2, dtype=wp_dtype, device=device),
             volume=make_scalar_array(vol2, device, wp_dtype),
@@ -858,7 +858,7 @@ class TestBatchPMEEnergyCorrections:
         batch_idx = np.array([0, 0, 1, 1, 1], dtype=np.int32)
 
         corrected_batch = wp.zeros(5, dtype=wp_dtype, device=device)
-        wp_batch_pme_energy_corrections(
+        batch_pme_energy_corrections(
             raw_energies=wp.array(raw_batch, dtype=wp_dtype, device=device),
             charges=wp.array(q_batch, dtype=wp_dtype, device=device),
             batch_idx=wp.array(batch_idx, dtype=wp.int32, device=device),
@@ -896,7 +896,7 @@ class TestBatchPMEEnergyCorrections:
 
 
 class TestBatchPMEEnergyCorrectionsWithChargeGrad:
-    """Test wp_batch_pme_energy_corrections_with_charge_grad kernel."""
+    """Test batch_pme_energy_corrections_with_charge_grad kernel."""
 
     def test_batch_charge_grad_shape(self, device, wp_dtype):
         """Test batch output shapes are correct."""
@@ -917,7 +917,7 @@ class TestBatchPMEEnergyCorrectionsWithChargeGrad:
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
         charge_gradients = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_batch_pme_energy_corrections_with_charge_grad(
+        batch_pme_energy_corrections_with_charge_grad(
             raw_energies=raw_energies,
             charges=charges,
             batch_idx=batch_idx,
@@ -959,7 +959,7 @@ class TestBatchPMEEnergyCorrectionsWithChargeGrad:
 
         # Energy-only
         corrected_only = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
-        wp_batch_pme_energy_corrections(
+        batch_pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             batch_idx=batch_idx,
@@ -974,7 +974,7 @@ class TestBatchPMEEnergyCorrectionsWithChargeGrad:
         # Energy + grad
         corrected_grad = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
         charge_grads = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
-        wp_batch_pme_energy_corrections_with_charge_grad(
+        batch_pme_energy_corrections_with_charge_grad(
             raw_energies=raw_energies,
             charges=charges,
             batch_idx=batch_idx,
@@ -1030,7 +1030,7 @@ class TestPMEKernelsRegression:
         total_charge = make_scalar_array(1.0, device, wp_dtype)
         corrected_energies = wp.zeros(num_atoms, dtype=wp_dtype, device=device)
 
-        wp_pme_energy_corrections(
+        pme_energy_corrections(
             raw_energies=raw_energies,
             charges=charges,
             volume=volume,
@@ -1085,7 +1085,7 @@ class TestPMEKernelsRegression:
             (mesh_nx, mesh_ny, nz_rfft), dtype=wp_dtype, device=device
         )
 
-        wp_pme_green_structure_factor(
+        pme_green_structure_factor(
             k_squared=k_squared,
             miller_x=miller_x,
             miller_y=miller_y,

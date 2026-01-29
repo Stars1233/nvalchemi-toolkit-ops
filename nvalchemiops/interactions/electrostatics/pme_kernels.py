@@ -77,13 +77,13 @@ Energy Correction Kernels:
     FFT within their own framework in between kernel launches. The sequence
     of calls looks like the following:
 
-    1. Spread charges to mesh: ``wp_spline_spread()``
+    1. Spread charges to mesh: ``spline_spread()``
     2. Forward FFT: ``framework.fft.rfftn(mesh)``
-    3. Compute Green's function: ``wp_pme_green_structure_factor()``
+    3. Compute Green's function: ``pme_green_structure_factor()``
     4. Convolution: ``mesh_fft * green_function / structure_factor_sq``
     5. Inverse FFT: ``framework.fft.irfftn(...)``
-    6. Gather potential: ``wp_spline_gather()``
-    7. Apply corrections: ``wp_pme_energy_corrections()``
+    6. Gather potential: ``spline_gather()``
+    7. Apply corrections: ``pme_energy_corrections()``
 
 REFERENCES
 ==========
@@ -792,7 +792,7 @@ for t in _T:
 ###########################################################################################
 
 
-def wp_pme_green_structure_factor(
+def pme_green_structure_factor(
     k_squared: wp.array,
     miller_x: wp.array,
     miller_y: wp.array,
@@ -819,13 +819,13 @@ def wp_pme_green_structure_factor(
     that are not available in Warp and must be performed by the calling
     framework. The typical workflow is:
 
-    1. Spread charges to mesh: wp_spline_spread()
+    1. Spread charges to mesh: spline_spread()
     2. Forward FFT: framework.fft.rfftn(mesh)      <-- Framework-specific
-    3. Compute Green's function: wp_pme_green_structure_factor()
+    3. Compute Green's function: pme_green_structure_factor()
     4. Convolution: mesh_fft * green_function / structure_factor_sq
     5. Inverse FFT: framework.fft.irfftn(...)     <-- Framework-specific
-    6. Gather potential: wp_spline_gather()
-    7. Apply corrections: wp_pme_energy_corrections()
+    6. Gather potential: spline_gather()
+    7. Apply corrections: pme_energy_corrections()
 
     Parameters
     ----------
@@ -881,7 +881,7 @@ def wp_pme_green_structure_factor(
     )
 
 
-def wp_batch_pme_green_structure_factor(
+def batch_pme_green_structure_factor(
     k_squared: wp.array,
     miller_x: wp.array,
     miller_y: wp.array,
@@ -958,7 +958,7 @@ def wp_batch_pme_green_structure_factor(
     )
 
 
-def wp_pme_energy_corrections(
+def pme_energy_corrections(
     raw_energies: wp.array,
     charges: wp.array,
     volume: wp.array,
@@ -1010,7 +1010,7 @@ def wp_pme_energy_corrections(
     )
 
 
-def wp_batch_pme_energy_corrections(
+def batch_pme_energy_corrections(
     raw_energies: wp.array,
     charges: wp.array,
     batch_idx: wp.array,
@@ -1059,7 +1059,7 @@ def wp_batch_pme_energy_corrections(
     )
 
 
-def wp_pme_energy_corrections_with_charge_grad(
+def pme_energy_corrections_with_charge_grad(
     raw_energies: wp.array,
     charges: wp.array,
     volume: wp.array,
@@ -1112,7 +1112,7 @@ def wp_pme_energy_corrections_with_charge_grad(
     )
 
 
-def wp_batch_pme_energy_corrections_with_charge_grad(
+def batch_pme_energy_corrections_with_charge_grad(
     raw_energies: wp.array,
     charges: wp.array,
     batch_idx: wp.array,
@@ -1176,11 +1176,11 @@ __all__ = [
     "_batch_pme_energy_corrections_kernel_overload",
     "_pme_energy_corrections_with_charge_grad_kernel_overload",
     "_batch_pme_energy_corrections_with_charge_grad_kernel_overload",
-    # Warp launchers (wp_*)
-    "wp_pme_green_structure_factor",
-    "wp_batch_pme_green_structure_factor",
-    "wp_pme_energy_corrections",
-    "wp_batch_pme_energy_corrections",
-    "wp_pme_energy_corrections_with_charge_grad",
-    "wp_batch_pme_energy_corrections_with_charge_grad",
+    # Warp launchers
+    "pme_green_structure_factor",
+    "batch_pme_green_structure_factor",
+    "pme_energy_corrections",
+    "batch_pme_energy_corrections",
+    "pme_energy_corrections_with_charge_grad",
+    "batch_pme_energy_corrections_with_charge_grad",
 ]

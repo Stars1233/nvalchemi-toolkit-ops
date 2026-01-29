@@ -17,7 +17,7 @@
 Unit tests for Coulomb warp kernel launchers.
 
 This test suite validates the correctness of the Coulomb warp launchers
-(wp_coulomb_energy, wp_coulomb_energy_forces, etc.) directly using warp arrays.
+(coulomb_energy, coulomb_energy_forces, etc.) directly using warp arrays.
 
 Tests cover:
 - Undamped Coulomb energy (alpha=0)
@@ -40,14 +40,14 @@ import pytest
 import warp as wp
 
 from nvalchemiops.interactions.electrostatics.coulomb import (
-    wp_batch_coulomb_energy,
-    wp_batch_coulomb_energy_forces,
-    wp_batch_coulomb_energy_forces_matrix,
-    wp_batch_coulomb_energy_matrix,
-    wp_coulomb_energy,
-    wp_coulomb_energy_forces,
-    wp_coulomb_energy_forces_matrix,
-    wp_coulomb_energy_matrix,
+    batch_coulomb_energy,
+    batch_coulomb_energy_forces,
+    batch_coulomb_energy_forces_matrix,
+    batch_coulomb_energy_matrix,
+    coulomb_energy,
+    coulomb_energy_forces,
+    coulomb_energy_forces_matrix,
+    coulomb_energy_matrix,
 )
 
 # ==============================================================================
@@ -339,7 +339,7 @@ def allocate_force_output(num_atoms: int, device: str) -> wp.array:
 
 
 class TestWpCoulombEnergyCsr:
-    """Tests for wp_coulomb_energy with CSR neighbor list format."""
+    """Tests for coulomb_energy with CSR neighbor list format."""
 
     def test_two_opposite_charges_undamped(self, device, two_atom_system):
         """Test undamped energy between opposite charges.
@@ -351,7 +351,7 @@ class TestWpCoulombEnergyCsr:
         inputs = prepare_csr_inputs(two_atom_system, device)
         energies = allocate_energy_output(two_atom_system["num_atoms"], device)
 
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -391,7 +391,7 @@ class TestWpCoulombEnergyCsr:
         unit_shifts_wp = wp.from_numpy(unit_shifts, dtype=wp.vec3i, device=device)
         energies = allocate_energy_output(2, device)
 
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=positions_wp,
             charges=charges_wp,
             cell=cell_wp,
@@ -434,7 +434,7 @@ class TestWpCoulombEnergyCsr:
             unit_shifts_wp = wp.from_numpy(unit_shifts, dtype=wp.vec3i, device=device)
             energies = allocate_energy_output(2, device)
 
-            wp_coulomb_energy(
+            coulomb_energy(
                 positions=positions_wp,
                 charges=charges_wp,
                 cell=cell_wp,
@@ -474,7 +474,7 @@ class TestWpCoulombEnergyCsr:
         energies = allocate_energy_output(2, device)
 
         # Use cutoff smaller than distance
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=positions_wp,
             charges=charges_wp,
             cell=cell_wp,
@@ -505,7 +505,7 @@ class TestWpCoulombEnergyDamped:
 
         # Undamped
         energies_undamped = allocate_energy_output(two_atom_system["num_atoms"], device)
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -520,7 +520,7 @@ class TestWpCoulombEnergyDamped:
 
         # Damped with alpha = 0.5
         energies_damped = allocate_energy_output(two_atom_system["num_atoms"], device)
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -551,7 +551,7 @@ class TestWpCoulombEnergyDamped:
         alpha = 0.3
 
         energies = allocate_energy_output(two_atom_system["num_atoms"], device)
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -579,7 +579,7 @@ class TestWpCoulombEnergyDamped:
 
 
 class TestWpCoulombEnergyForces:
-    """Tests for wp_coulomb_energy_forces."""
+    """Tests for coulomb_energy_forces."""
 
     def test_forces_opposite_direction_to_energy_gradient(
         self, device, two_atom_system
@@ -591,7 +591,7 @@ class TestWpCoulombEnergyForces:
         energies = allocate_energy_output(num_atoms, device)
         forces = allocate_force_output(num_atoms, device)
 
-        wp_coulomb_energy_forces(
+        coulomb_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -620,7 +620,7 @@ class TestWpCoulombEnergyForces:
         energies = allocate_energy_output(num_atoms, device)
         forces = allocate_force_output(num_atoms, device)
 
-        wp_coulomb_energy_forces(
+        coulomb_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -648,7 +648,7 @@ class TestWpCoulombEnergyForces:
         energies = allocate_energy_output(num_atoms, device)
         forces = allocate_force_output(num_atoms, device)
 
-        wp_coulomb_energy_forces(
+        coulomb_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -675,7 +675,7 @@ class TestWpCoulombEnergyForces:
 
         # Energy only
         energies_only = allocate_energy_output(num_atoms, device)
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -691,7 +691,7 @@ class TestWpCoulombEnergyForces:
         # Energy + forces
         energies_combined = allocate_energy_output(num_atoms, device)
         forces = allocate_force_output(num_atoms, device)
-        wp_coulomb_energy_forces(
+        coulomb_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -725,7 +725,7 @@ class TestWpCoulombEnergyMatrix:
         # CSR format
         csr_inputs = prepare_csr_inputs(two_atom_system, device)
         energies_csr = allocate_energy_output(two_atom_system["num_atoms"], device)
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=csr_inputs["positions"],
             charges=csr_inputs["charges"],
             cell=csr_inputs["cell"],
@@ -743,7 +743,7 @@ class TestWpCoulombEnergyMatrix:
         energies_mat = allocate_energy_output(
             two_atom_matrix_system["num_atoms"], device
         )
-        wp_coulomb_energy_matrix(
+        coulomb_energy_matrix(
             positions=mat_inputs["positions"],
             charges=mat_inputs["charges"],
             cell=mat_inputs["cell"],
@@ -772,7 +772,7 @@ class TestWpCoulombEnergyMatrix:
         energies = allocate_energy_output(num_atoms, device)
         forces = allocate_force_output(num_atoms, device)
 
-        wp_coulomb_energy_forces_matrix(
+        coulomb_energy_forces_matrix(
             positions=mat_inputs["positions"],
             charges=mat_inputs["charges"],
             cell=mat_inputs["cell"],
@@ -822,7 +822,7 @@ class TestWpBatchCoulombEnergy:
 
         energies = allocate_energy_output(batch_two_systems["num_atoms"], device)
 
-        wp_batch_coulomb_energy(
+        batch_coulomb_energy(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -873,7 +873,7 @@ class TestWpBatchCoulombEnergy:
         energies = allocate_energy_output(batch_two_systems["num_atoms"], device)
         forces = allocate_force_output(batch_two_systems["num_atoms"], device)
 
-        wp_batch_coulomb_energy_forces(
+        batch_coulomb_energy_forces(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -929,7 +929,7 @@ class TestWpBatchCoulombEnergyMatrix:
 
         energies = allocate_energy_output(batch_two_systems_matrix["num_atoms"], device)
 
-        wp_batch_coulomb_energy_matrix(
+        batch_coulomb_energy_matrix(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -977,7 +977,7 @@ class TestWpBatchCoulombEnergyMatrix:
         energies = allocate_energy_output(batch_two_systems_matrix["num_atoms"], device)
         forces = allocate_force_output(batch_two_systems_matrix["num_atoms"], device)
 
-        wp_batch_coulomb_energy_forces_matrix(
+        batch_coulomb_energy_forces_matrix(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -1027,7 +1027,7 @@ class TestWpBatchCoulombEnergyMatrix:
         energies_undamped = allocate_energy_output(
             batch_two_systems_matrix["num_atoms"], device
         )
-        wp_batch_coulomb_energy_matrix(
+        batch_coulomb_energy_matrix(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -1045,7 +1045,7 @@ class TestWpBatchCoulombEnergyMatrix:
         energies_damped = allocate_energy_output(
             batch_two_systems_matrix["num_atoms"], device
         )
-        wp_batch_coulomb_energy_matrix(
+        batch_coulomb_energy_matrix(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -1105,7 +1105,7 @@ class TestCoulombRegressionValues:
         unit_shifts_wp = wp.from_numpy(unit_shifts, dtype=wp.vec3i, device=device)
         energies = allocate_energy_output(2, device)
 
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=positions_wp,
             charges=charges_wp,
             cell=cell_wp,
@@ -1154,7 +1154,7 @@ class TestCoulombRegressionValues:
         unit_shifts_wp = wp.from_numpy(unit_shifts, dtype=wp.vec3i, device=device)
         energies = allocate_energy_output(2, device)
 
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=positions_wp,
             charges=charges_wp,
             cell=cell_wp,
@@ -1200,7 +1200,7 @@ class TestCoulombRegressionValues:
         energies = allocate_energy_output(2, device)
         forces = allocate_force_output(2, device)
 
-        wp_coulomb_energy_forces(
+        coulomb_energy_forces(
             positions=positions_wp,
             charges=charges_wp,
             cell=cell_wp,
@@ -1238,7 +1238,7 @@ class TestCoulombRegressionValues:
         inputs = prepare_csr_inputs(three_atom_system, device)
         energies = allocate_energy_output(three_atom_system["num_atoms"], device)
 
-        wp_coulomb_energy(
+        coulomb_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -1286,7 +1286,7 @@ class TestCoulombRegressionValues:
         energies = allocate_energy_output(2, device)
         forces = allocate_force_output(2, device)
 
-        wp_coulomb_energy_forces(
+        coulomb_energy_forces(
             positions=positions_wp,
             charges=charges_wp,
             cell=cell_wp,

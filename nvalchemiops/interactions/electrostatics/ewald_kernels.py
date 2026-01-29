@@ -2499,7 +2499,7 @@ def _batch_ewald_reciprocal_space_energy_forces_charge_grad_kernel(
 ###########################################################################################
 
 
-def wp_ewald_real_space_energy(
+def ewald_real_space_energy(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -2559,7 +2559,7 @@ def wp_ewald_real_space_energy(
     )
 
 
-def wp_ewald_real_space_energy_forces(
+def ewald_real_space_energy_forces(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -2621,7 +2621,7 @@ def wp_ewald_real_space_energy_forces(
     )
 
 
-def wp_ewald_real_space_energy_matrix(
+def ewald_real_space_energy_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -2679,7 +2679,7 @@ def wp_ewald_real_space_energy_matrix(
     )
 
 
-def wp_ewald_real_space_energy_forces_matrix(
+def ewald_real_space_energy_forces_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -2741,7 +2741,7 @@ def wp_ewald_real_space_energy_forces_matrix(
     )
 
 
-def wp_ewald_real_space_energy_forces_charge_grad(
+def ewald_real_space_energy_forces_charge_grad(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -2807,7 +2807,7 @@ def wp_ewald_real_space_energy_forces_charge_grad(
     )
 
 
-def wp_ewald_real_space_energy_forces_charge_grad_matrix(
+def ewald_real_space_energy_forces_charge_grad_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -2878,7 +2878,7 @@ def wp_ewald_real_space_energy_forces_charge_grad_matrix(
 # ==================== Batch Real-Space Launchers ====================
 
 
-def wp_batch_ewald_real_space_energy(
+def batch_ewald_real_space_energy(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -2940,7 +2940,7 @@ def wp_batch_ewald_real_space_energy(
     )
 
 
-def wp_batch_ewald_real_space_energy_forces(
+def batch_ewald_real_space_energy_forces(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -3006,7 +3006,7 @@ def wp_batch_ewald_real_space_energy_forces(
     )
 
 
-def wp_batch_ewald_real_space_energy_matrix(
+def batch_ewald_real_space_energy_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -3068,7 +3068,7 @@ def wp_batch_ewald_real_space_energy_matrix(
     )
 
 
-def wp_batch_ewald_real_space_energy_forces_matrix(
+def batch_ewald_real_space_energy_forces_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -3134,7 +3134,7 @@ def wp_batch_ewald_real_space_energy_forces_matrix(
     )
 
 
-def wp_batch_ewald_real_space_energy_forces_charge_grad(
+def batch_ewald_real_space_energy_forces_charge_grad(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -3204,7 +3204,7 @@ def wp_batch_ewald_real_space_energy_forces_charge_grad(
     )
 
 
-def wp_batch_ewald_real_space_energy_forces_charge_grad_matrix(
+def batch_ewald_real_space_energy_forces_charge_grad_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -3279,7 +3279,7 @@ def wp_batch_ewald_real_space_energy_forces_charge_grad_matrix(
 # ==================== Reciprocal-Space Launchers ====================
 
 
-def wp_ewald_reciprocal_space_fill_structure_factors(
+def ewald_reciprocal_space_fill_structure_factors(
     positions: wp.array,
     charges: wp.array,
     k_vectors: wp.array,
@@ -3345,7 +3345,7 @@ def wp_ewald_reciprocal_space_fill_structure_factors(
     )
 
 
-def wp_ewald_reciprocal_space_compute_energy(
+def ewald_reciprocal_space_compute_energy(
     charges: wp.array,
     cos_k_dot_r: wp.array,
     sin_k_dot_r: wp.array,
@@ -3395,7 +3395,7 @@ def wp_ewald_reciprocal_space_compute_energy(
     )
 
 
-def wp_ewald_subtract_self_energy(
+def ewald_subtract_self_energy(
     charges: wp.array,
     alpha: wp.array,
     total_charge: wp.array,
@@ -3435,7 +3435,7 @@ def wp_ewald_subtract_self_energy(
     )
 
 
-def wp_ewald_reciprocal_space_energy_forces(
+def ewald_reciprocal_space_energy_forces(
     charges: wp.array,
     k_vectors: wp.array,
     cos_k_dot_r: wp.array,
@@ -3493,7 +3493,7 @@ def wp_ewald_reciprocal_space_energy_forces(
     )
 
 
-def wp_ewald_reciprocal_space_energy_forces_charge_grad(
+def ewald_reciprocal_space_energy_forces_charge_grad(
     charges: wp.array,
     k_vectors: wp.array,
     cos_k_dot_r: wp.array,
@@ -3558,7 +3558,7 @@ def wp_ewald_reciprocal_space_energy_forces_charge_grad(
 # ==================== Batch Reciprocal-Space Launchers ====================
 
 
-def wp_batch_ewald_reciprocal_space_fill_structure_factors(
+def batch_ewald_reciprocal_space_fill_structure_factors(
     positions: wp.array,
     charges: wp.array,
     k_vectors: wp.array,
@@ -3642,7 +3642,7 @@ def wp_batch_ewald_reciprocal_space_fill_structure_factors(
     )
 
 
-def wp_batch_ewald_reciprocal_space_compute_energy(
+def batch_ewald_reciprocal_space_compute_energy(
     charges: wp.array,
     batch_id: wp.array,
     cos_k_dot_r: wp.array,
@@ -3696,7 +3696,7 @@ def wp_batch_ewald_reciprocal_space_compute_energy(
     )
 
 
-def wp_batch_ewald_subtract_self_energy(
+def batch_ewald_subtract_self_energy(
     charges: wp.array,
     batch_idx: wp.array,
     alpha: wp.array,
@@ -3739,7 +3739,7 @@ def wp_batch_ewald_subtract_self_energy(
     )
 
 
-def wp_batch_ewald_reciprocal_space_energy_forces(
+def batch_ewald_reciprocal_space_energy_forces(
     charges: wp.array,
     batch_id: wp.array,
     k_vectors: wp.array,
@@ -3801,7 +3801,7 @@ def wp_batch_ewald_reciprocal_space_energy_forces(
     )
 
 
-def wp_batch_ewald_reciprocal_space_energy_forces_charge_grad(
+def batch_ewald_reciprocal_space_energy_forces_charge_grad(
     charges: wp.array,
     batch_id: wp.array,
     k_vectors: wp.array,

@@ -31,8 +31,8 @@ This module provides two layers:
    - Batch variants of all above
 
 2. **Warp Launchers** (framework-agnostic API):
-   - ``wp_coulomb_energy()``, ``wp_coulomb_energy_forces()``
-   - ``wp_coulomb_energy_matrix()``, ``wp_coulomb_energy_forces_matrix()``
+   - ``coulomb_energy()``, ``coulomb_energy_forces()``
+   - ``coulomb_energy_matrix()``, ``coulomb_energy_forces_matrix()``
    - Batch variants of all above
 
 For PyTorch integration, see ``nvalchemiops.torch.interactions.electrostatics.coulomb``.
@@ -105,14 +105,14 @@ from nvalchemiops.math import wp_erfc
 
 __all__ = [
     # Warp launchers (framework-agnostic public API)
-    "wp_coulomb_energy",
-    "wp_coulomb_energy_forces",
-    "wp_coulomb_energy_matrix",
-    "wp_coulomb_energy_forces_matrix",
-    "wp_batch_coulomb_energy",
-    "wp_batch_coulomb_energy_forces",
-    "wp_batch_coulomb_energy_matrix",
-    "wp_batch_coulomb_energy_forces_matrix",
+    "coulomb_energy",
+    "coulomb_energy_forces",
+    "coulomb_energy_matrix",
+    "coulomb_energy_forces_matrix",
+    "batch_coulomb_energy",
+    "batch_coulomb_energy_forces",
+    "batch_coulomb_energy_matrix",
+    "batch_coulomb_energy_forces_matrix",
 ]
 
 # Mathematical constants
@@ -709,7 +709,7 @@ def _batch_coulomb_energy_forces_matrix_kernel(
 # ==============================================================================
 
 
-def wp_coulomb_energy(
+def coulomb_energy(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -776,7 +776,7 @@ def wp_coulomb_energy(
     )
 
 
-def wp_coulomb_energy_forces(
+def coulomb_energy_forces(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -844,7 +844,7 @@ def wp_coulomb_energy_forces(
     )
 
 
-def wp_coulomb_energy_matrix(
+def coulomb_energy_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -908,7 +908,7 @@ def wp_coulomb_energy_matrix(
     )
 
 
-def wp_coulomb_energy_forces_matrix(
+def coulomb_energy_forces_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -976,7 +976,7 @@ def wp_coulomb_energy_forces_matrix(
     )
 
 
-def wp_batch_coulomb_energy(
+def batch_coulomb_energy(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -1044,7 +1044,7 @@ def wp_batch_coulomb_energy(
     )
 
 
-def wp_batch_coulomb_energy_forces(
+def batch_coulomb_energy_forces(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -1116,7 +1116,7 @@ def wp_batch_coulomb_energy_forces(
     )
 
 
-def wp_batch_coulomb_energy_matrix(
+def batch_coulomb_energy_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,
@@ -1184,7 +1184,7 @@ def wp_batch_coulomb_energy_matrix(
     )
 
 
-def wp_batch_coulomb_energy_forces_matrix(
+def batch_coulomb_energy_forces_matrix(
     positions: wp.array,
     charges: wp.array,
     cell: wp.array,

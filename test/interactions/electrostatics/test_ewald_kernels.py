@@ -17,7 +17,7 @@
 Unit tests for Ewald warp kernel launchers.
 
 This test suite validates the correctness of the Ewald warp launchers
-(wp_ewald_real_space_*, wp_ewald_reciprocal_space_*, etc.) directly using warp arrays.
+(ewald_real_space_*, ewald_reciprocal_space_*, etc.) directly using warp arrays.
 
 Tests cover:
 - Real-space energy calculations (damped Coulomb with erfc)
@@ -42,28 +42,28 @@ import pytest
 import warp as wp
 
 from nvalchemiops.interactions.electrostatics.ewald_kernels import (
-    wp_batch_ewald_real_space_energy,
-    wp_batch_ewald_real_space_energy_forces,
-    wp_batch_ewald_real_space_energy_forces_charge_grad,
-    wp_batch_ewald_real_space_energy_forces_charge_grad_matrix,
-    wp_batch_ewald_real_space_energy_forces_matrix,
-    wp_batch_ewald_real_space_energy_matrix,
-    wp_batch_ewald_reciprocal_space_compute_energy,
-    wp_batch_ewald_reciprocal_space_energy_forces,
-    wp_batch_ewald_reciprocal_space_energy_forces_charge_grad,
-    wp_batch_ewald_reciprocal_space_fill_structure_factors,
-    wp_batch_ewald_subtract_self_energy,
-    wp_ewald_real_space_energy,
-    wp_ewald_real_space_energy_forces,
-    wp_ewald_real_space_energy_forces_charge_grad,
-    wp_ewald_real_space_energy_forces_charge_grad_matrix,
-    wp_ewald_real_space_energy_forces_matrix,
-    wp_ewald_real_space_energy_matrix,
-    wp_ewald_reciprocal_space_compute_energy,
-    wp_ewald_reciprocal_space_energy_forces,
-    wp_ewald_reciprocal_space_energy_forces_charge_grad,
-    wp_ewald_reciprocal_space_fill_structure_factors,
-    wp_ewald_subtract_self_energy,
+    batch_ewald_real_space_energy,
+    batch_ewald_real_space_energy_forces,
+    batch_ewald_real_space_energy_forces_charge_grad,
+    batch_ewald_real_space_energy_forces_charge_grad_matrix,
+    batch_ewald_real_space_energy_forces_matrix,
+    batch_ewald_real_space_energy_matrix,
+    batch_ewald_reciprocal_space_compute_energy,
+    batch_ewald_reciprocal_space_energy_forces,
+    batch_ewald_reciprocal_space_energy_forces_charge_grad,
+    batch_ewald_reciprocal_space_fill_structure_factors,
+    batch_ewald_subtract_self_energy,
+    ewald_real_space_energy,
+    ewald_real_space_energy_forces,
+    ewald_real_space_energy_forces_charge_grad,
+    ewald_real_space_energy_forces_charge_grad_matrix,
+    ewald_real_space_energy_forces_matrix,
+    ewald_real_space_energy_matrix,
+    ewald_reciprocal_space_compute_energy,
+    ewald_reciprocal_space_energy_forces,
+    ewald_reciprocal_space_energy_forces_charge_grad,
+    ewald_reciprocal_space_fill_structure_factors,
+    ewald_subtract_self_energy,
 )
 
 # ==============================================================================
@@ -439,7 +439,7 @@ def allocate_charge_grad_output(num_atoms: int, device: str) -> wp.array:
 
 
 class TestWpEwaldRealSpaceEnergyCsr:
-    """Tests for wp_ewald_real_space_energy with CSR neighbor list format."""
+    """Tests for ewald_real_space_energy with CSR neighbor list format."""
 
     def test_two_opposite_charges_damped(self, device, two_atom_system):
         """Test damped energy between opposite charges.
@@ -453,7 +453,7 @@ class TestWpEwaldRealSpaceEnergyCsr:
         alpha = 0.3
         alpha_arr = make_alpha_array(alpha, device)
 
-        wp_ewald_real_space_energy(
+        ewald_real_space_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -480,7 +480,7 @@ class TestWpEwaldRealSpaceEnergyCsr:
         # Lower alpha (less damping)
         energies_low = allocate_energy_output(two_atom_system["num_atoms"], device)
         alpha_low = make_alpha_array(0.1, device)
-        wp_ewald_real_space_energy(
+        ewald_real_space_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -496,7 +496,7 @@ class TestWpEwaldRealSpaceEnergyCsr:
         # Higher alpha (more damping)
         energies_high = allocate_energy_output(two_atom_system["num_atoms"], device)
         alpha_high = make_alpha_array(0.5, device)
-        wp_ewald_real_space_energy(
+        ewald_real_space_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -522,7 +522,7 @@ class TestWpEwaldRealSpaceEnergyCsr:
         alpha = 0.2
         alpha_arr = make_alpha_array(alpha, device)
 
-        wp_ewald_real_space_energy(
+        ewald_real_space_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -553,7 +553,7 @@ class TestWpEwaldRealSpaceEnergyCsr:
         energies = allocate_energy_output(two_atom_system["num_atoms"], device)
         alpha_arr = make_alpha_array(0.3, device, dtype=dtype)
 
-        wp_ewald_real_space_energy(
+        ewald_real_space_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -587,7 +587,7 @@ class TestWpEwaldRealSpaceEnergyMatrix:
         alpha = 0.3
         alpha_arr = make_alpha_array(alpha, device)
 
-        wp_ewald_real_space_energy_matrix(
+        ewald_real_space_energy_matrix(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -626,7 +626,7 @@ class TestWpEwaldRealSpaceEnergyForces:
         forces = allocate_force_output(num_atoms, device)
         alpha_arr = make_alpha_array(0.3, device)
 
-        wp_ewald_real_space_energy_forces(
+        ewald_real_space_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -654,7 +654,7 @@ class TestWpEwaldRealSpaceEnergyForces:
         forces = allocate_force_output(num_atoms, device)
         alpha_arr = make_alpha_array(0.3, device)
 
-        wp_ewald_real_space_energy_forces(
+        ewald_real_space_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -680,7 +680,7 @@ class TestWpEwaldRealSpaceEnergyForces:
 
         # Energy only
         energies_only = allocate_energy_output(num_atoms, device)
-        wp_ewald_real_space_energy(
+        ewald_real_space_energy(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -697,7 +697,7 @@ class TestWpEwaldRealSpaceEnergyForces:
         energies_combined = allocate_energy_output(num_atoms, device)
         forces = allocate_force_output(num_atoms, device)
         alpha_arr2 = make_alpha_array(0.3, device)
-        wp_ewald_real_space_energy_forces(
+        ewald_real_space_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -728,7 +728,7 @@ class TestWpEwaldRealSpaceEnergyForcesMatrix:
         forces = allocate_force_output(num_atoms, device)
         alpha_arr = make_alpha_array(0.3, device)
 
-        wp_ewald_real_space_energy_forces_matrix(
+        ewald_real_space_energy_forces_matrix(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -781,7 +781,7 @@ class TestWpBatchEwaldRealSpaceEnergy:
 
         energies = allocate_energy_output(batch_two_systems["num_atoms"], device)
 
-        wp_batch_ewald_real_space_energy(
+        batch_ewald_real_space_energy(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -836,7 +836,7 @@ class TestWpBatchEwaldRealSpaceEnergy:
         energies = allocate_energy_output(batch_two_systems["num_atoms"], device)
         forces = allocate_force_output(batch_two_systems["num_atoms"], device)
 
-        wp_batch_ewald_real_space_energy_forces(
+        batch_ewald_real_space_energy_forces(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -890,7 +890,7 @@ class TestWpBatchEwaldRealSpaceMatrix:
 
         energies = allocate_energy_output(batch_two_systems_matrix["num_atoms"], device)
 
-        wp_batch_ewald_real_space_energy_matrix(
+        batch_ewald_real_space_energy_matrix(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -944,7 +944,7 @@ class TestWpEwaldReciprocalSpaceStructureFactors:
         real_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
         imag_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
 
-        wp_ewald_reciprocal_space_fill_structure_factors(
+        ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -997,7 +997,7 @@ class TestWpEwaldReciprocalSpaceStructureFactors:
         real_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
         imag_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
 
-        wp_ewald_reciprocal_space_fill_structure_factors(
+        ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -1050,7 +1050,7 @@ class TestWpEwaldReciprocalSpaceEnergy:
         real_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
         imag_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
 
-        wp_ewald_reciprocal_space_fill_structure_factors(
+        ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -1068,7 +1068,7 @@ class TestWpEwaldReciprocalSpaceEnergy:
         # Then compute energy
         reciprocal_energies = wp.zeros(num_atoms, dtype=wp.float64, device=device)
 
-        wp_ewald_reciprocal_space_compute_energy(
+        ewald_reciprocal_space_compute_energy(
             charges=charges,
             cos_k_dot_r=cos_k_dot_r,
             sin_k_dot_r=sin_k_dot_r,
@@ -1112,7 +1112,7 @@ class TestWpEwaldSubtractSelfEnergy:
         )
         energy_out = wp.zeros(num_atoms, dtype=wp.float64, device=device)
 
-        wp_ewald_subtract_self_energy(
+        ewald_subtract_self_energy(
             charges=charges,
             alpha=alpha_arr,
             total_charge=total_charge,
@@ -1166,7 +1166,7 @@ class TestWpEwaldReciprocalSpaceEnergyForces:
         real_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
         imag_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
 
-        wp_ewald_reciprocal_space_fill_structure_factors(
+        ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -1185,7 +1185,7 @@ class TestWpEwaldReciprocalSpaceEnergyForces:
         reciprocal_energies = wp.zeros(num_atoms, dtype=wp.float64, device=device)
         forces = allocate_force_output(num_atoms, device)
 
-        wp_ewald_reciprocal_space_energy_forces(
+        ewald_reciprocal_space_energy_forces(
             charges=charges,
             k_vectors=k_vectors,
             cos_k_dot_r=cos_k_dot_r,
@@ -1235,7 +1235,7 @@ class TestEwaldKernelsRegression:
 
         energies = allocate_energy_output(2, device)
 
-        wp_ewald_real_space_energy(
+        ewald_real_space_energy(
             positions=positions_wp,
             charges=charges_wp,
             cell=cell_wp,
@@ -1274,7 +1274,7 @@ class TestWpEwaldRealSpaceEnergyForcesChargeGrad:
         charge_grads = allocate_charge_grad_output(num_atoms, device)
         alpha_arr = make_alpha_array(0.3, device)
 
-        wp_ewald_real_space_energy_forces_charge_grad(
+        ewald_real_space_energy_forces_charge_grad(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -1303,7 +1303,7 @@ class TestWpEwaldRealSpaceEnergyForcesChargeGrad:
         energies_ef = allocate_energy_output(num_atoms, device)
         forces_ef = allocate_force_output(num_atoms, device)
         alpha_arr2 = make_alpha_array(0.3, device)
-        wp_ewald_real_space_energy_forces(
+        ewald_real_space_energy_forces(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -1321,7 +1321,7 @@ class TestWpEwaldRealSpaceEnergyForcesChargeGrad:
         energies_cg = allocate_energy_output(num_atoms, device)
         forces_cg = allocate_force_output(num_atoms, device)
         charge_grads = allocate_charge_grad_output(num_atoms, device)
-        wp_ewald_real_space_energy_forces_charge_grad(
+        ewald_real_space_energy_forces_charge_grad(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -1349,7 +1349,7 @@ class TestWpEwaldRealSpaceEnergyForcesChargeGrad:
         charge_grads = allocate_charge_grad_output(num_atoms, device)
         alpha_arr = make_alpha_array(0.3, device)
 
-        wp_ewald_real_space_energy_forces_charge_grad(
+        ewald_real_space_energy_forces_charge_grad(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -1389,7 +1389,7 @@ class TestWpEwaldRealSpaceEnergyForcesChargeGradMatrix:
         charge_grads = allocate_charge_grad_output(num_atoms, device)
         alpha_arr = make_alpha_array(0.3, device)
 
-        wp_ewald_real_space_energy_forces_charge_grad_matrix(
+        ewald_real_space_energy_forces_charge_grad_matrix(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -1418,7 +1418,7 @@ class TestWpEwaldRealSpaceEnergyForcesChargeGradMatrix:
         charge_grads = allocate_charge_grad_output(num_atoms, device)
         alpha_arr = make_alpha_array(0.3, device)
 
-        wp_ewald_real_space_energy_forces_charge_grad_matrix(
+        ewald_real_space_energy_forces_charge_grad_matrix(
             positions=inputs["positions"],
             charges=inputs["charges"],
             cell=inputs["cell"],
@@ -1474,7 +1474,7 @@ class TestWpBatchEwaldRealSpaceEnergyForcesMatrix:
         energies = allocate_energy_output(num_atoms, device)
         forces = allocate_force_output(num_atoms, device)
 
-        wp_batch_ewald_real_space_energy_forces_matrix(
+        batch_ewald_real_space_energy_forces_matrix(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -1534,7 +1534,7 @@ class TestWpBatchEwaldRealSpaceEnergyForcesChargeGrad:
         forces = allocate_force_output(num_atoms, device)
         charge_grads = allocate_charge_grad_output(num_atoms, device)
 
-        wp_batch_ewald_real_space_energy_forces_charge_grad(
+        batch_ewald_real_space_energy_forces_charge_grad(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -1592,7 +1592,7 @@ class TestWpBatchEwaldRealSpaceEnergyForcesChargeGradMatrix:
         forces = allocate_force_output(num_atoms, device)
         charge_grads = allocate_charge_grad_output(num_atoms, device)
 
-        wp_batch_ewald_real_space_energy_forces_charge_grad_matrix(
+        batch_ewald_real_space_energy_forces_charge_grad_matrix(
             positions=positions,
             charges=charges,
             cell=cell,
@@ -1651,7 +1651,7 @@ class TestWpEwaldReciprocalSpaceEnergyForcesChargeGrad:
         real_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
         imag_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
 
-        wp_ewald_reciprocal_space_fill_structure_factors(
+        ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -1671,7 +1671,7 @@ class TestWpEwaldReciprocalSpaceEnergyForcesChargeGrad:
         forces = allocate_force_output(num_atoms, device)
         charge_grads = allocate_charge_grad_output(num_atoms, device)
 
-        wp_ewald_reciprocal_space_energy_forces_charge_grad(
+        ewald_reciprocal_space_energy_forces_charge_grad(
             charges=charges,
             k_vectors=k_vectors,
             cos_k_dot_r=cos_k_dot_r,
@@ -1714,7 +1714,7 @@ class TestWpEwaldReciprocalSpaceEnergyForcesChargeGrad:
         real_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
         imag_sf = wp.zeros(num_k, dtype=wp.float64, device=device)
 
-        wp_ewald_reciprocal_space_fill_structure_factors(
+        ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -1734,7 +1734,7 @@ class TestWpEwaldReciprocalSpaceEnergyForcesChargeGrad:
         forces = allocate_force_output(num_atoms, device)
         charge_grads = allocate_charge_grad_output(num_atoms, device)
 
-        wp_ewald_reciprocal_space_energy_forces_charge_grad(
+        ewald_reciprocal_space_energy_forces_charge_grad(
             charges=charges,
             k_vectors=k_vectors,
             cos_k_dot_r=cos_k_dot_r,
@@ -1858,7 +1858,7 @@ class TestWpBatchEwaldReciprocalSpaceStructureFactors:
         # max_blocks_per_system: ceil(max_atoms_per_system / BATCH_BLOCK_SIZE)
         max_blocks_per_system = 1
 
-        wp_batch_ewald_reciprocal_space_fill_structure_factors(
+        batch_ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -1931,7 +1931,7 @@ class TestWpBatchEwaldReciprocalSpaceComputeEnergy:
 
         max_blocks_per_system = 1
 
-        wp_batch_ewald_reciprocal_space_fill_structure_factors(
+        batch_ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -1954,7 +1954,7 @@ class TestWpBatchEwaldReciprocalSpaceComputeEnergy:
         # Then compute energy
         reciprocal_energies = wp.zeros(num_atoms, dtype=wp.float64, device=device)
 
-        wp_batch_ewald_reciprocal_space_compute_energy(
+        batch_ewald_reciprocal_space_compute_energy(
             charges=charges,
             batch_id=batch_idx,
             cos_k_dot_r=cos_k_dot_r,
@@ -2004,7 +2004,7 @@ class TestWpBatchEwaldSubtractSelfEnergy:
         )
         energy_out = wp.zeros(num_atoms, dtype=wp.float64, device=device)
 
-        wp_batch_ewald_subtract_self_energy(
+        batch_ewald_subtract_self_energy(
             charges=charges,
             batch_idx=batch_idx,
             alpha=alpha_arr,
@@ -2066,7 +2066,7 @@ class TestWpBatchEwaldReciprocalSpaceEnergyForces:
 
         max_blocks_per_system = 1
 
-        wp_batch_ewald_reciprocal_space_fill_structure_factors(
+        batch_ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -2090,7 +2090,7 @@ class TestWpBatchEwaldReciprocalSpaceEnergyForces:
         reciprocal_energies = wp.zeros(num_atoms, dtype=wp.float64, device=device)
         forces = allocate_force_output(num_atoms, device)
 
-        wp_batch_ewald_reciprocal_space_energy_forces(
+        batch_ewald_reciprocal_space_energy_forces(
             charges=charges,
             batch_id=batch_idx,
             k_vectors=k_vectors,
@@ -2152,7 +2152,7 @@ class TestWpBatchEwaldReciprocalSpaceEnergyForcesChargeGrad:
 
         max_blocks_per_system = 1
 
-        wp_batch_ewald_reciprocal_space_fill_structure_factors(
+        batch_ewald_reciprocal_space_fill_structure_factors(
             positions=positions,
             charges=charges,
             k_vectors=k_vectors,
@@ -2177,7 +2177,7 @@ class TestWpBatchEwaldReciprocalSpaceEnergyForcesChargeGrad:
         forces = allocate_force_output(num_atoms, device)
         charge_grads = allocate_charge_grad_output(num_atoms, device)
 
-        wp_batch_ewald_reciprocal_space_energy_forces_charge_grad(
+        batch_ewald_reciprocal_space_energy_forces_charge_grad(
             charges=charges,
             batch_id=batch_idx,
             k_vectors=k_vectors,
