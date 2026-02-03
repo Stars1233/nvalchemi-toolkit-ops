@@ -43,19 +43,32 @@ dependency in force calculations:
 
 Warp Launchers (Framework-Agnostic)
 ------------------------------------
-This module provides framework-agnostic warp launcher functions that accept
-warp arrays directly. These are called by framework-specific wrappers
-(PyTorch, JAX) after converting framework tensors to warp arrays:
+This module provides four framework-agnostic warp launcher functions that accept
+warp arrays directly, with distinct signatures based on neighbor format and PBC support.
+These are called by framework-specific wrappers (PyTorch, JAX) after converting
+framework tensors to warp arrays:
+
+**Neighbor Matrix Format:**
+
+- ``dftd3_matrix`` - Non-periodic systems (no PBC parameters)
+- ``dftd3_matrix_pbc`` - Periodic systems (requires cell and neighbor_matrix_shifts)
+
+**Neighbor List (CSR) Format:**
+
+- ``dftd3`` - Non-periodic systems (no PBC parameters)
+- ``dftd3_pbc`` - Periodic systems (requires cell and unit_shifts)
 
 .. code-block:: python
 
     from nvalchemiops.interactions.dispersion._dftd3 import (
-        dftd3_nm,
-        dftd3_nl,
+        dftd3_matrix,
+        dftd3_matrix_pbc,
+        dftd3,
+        dftd3_pbc,
     )
 
-    # Neighbor matrix format
-    dftd3_nm(
+    # Neighbor matrix format - non-periodic
+    dftd3_matrix(
         positions=positions_wp,  # warp array
         numbers=numbers_wp,
         neighbor_matrix=neighbor_matrix_wp,
@@ -67,11 +80,32 @@ warp arrays directly. These are called by framework-specific wrappers
         coord_num=coord_num_wp,  # pre-allocated output
         forces=forces_wp,  # pre-allocated output
         energy=energy_wp,  # pre-allocated output
-        virial=virial_wp,  # pre-allocated output
+        virial=virial_wp,  # pre-allocated output (not computed for non-PBC)
+        vec_dtype=wp.vec3f,
     )
 
-    # Neighbor list format (CSR)
-    dftd3_nl(
+    # Neighbor matrix format - periodic (PBC)
+    dftd3_matrix_pbc(
+        positions=positions_wp,
+        numbers=numbers_wp,
+        neighbor_matrix=neighbor_matrix_wp,
+        cell=cell_wp,  # REQUIRED for PBC
+        neighbor_matrix_shifts=shifts_wp,  # REQUIRED for PBC
+        covalent_radii=covalent_radii_wp,
+        r4r2=r4r2_wp,
+        c6_reference=c6_reference_wp,
+        coord_num_ref=coord_num_ref_wp,
+        a1=0.3981, a2=4.4211, s8=1.9889,
+        coord_num=coord_num_wp,
+        forces=forces_wp,
+        energy=energy_wp,
+        virial=virial_wp,
+        vec_dtype=wp.vec3f,
+        compute_virial=True,  # Optional: enable virial computation
+    )
+
+    # Neighbor list format (CSR) - non-periodic
+    dftd3(
         positions=positions_wp,
         numbers=numbers_wp,
         idx_j=idx_j_wp,
@@ -81,10 +115,32 @@ warp arrays directly. These are called by framework-specific wrappers
         c6_reference=c6_reference_wp,
         coord_num_ref=coord_num_ref_wp,
         a1=0.3981, a2=4.4211, s8=1.9889,
-        coord_num=coord_num_wp,  # pre-allocated output
-        forces=forces_wp,  # pre-allocated output
-        energy=energy_wp,  # pre-allocated output
-        virial=virial_wp,  # pre-allocated output
+        coord_num=coord_num_wp,
+        forces=forces_wp,
+        energy=energy_wp,
+        virial=virial_wp,  # pre-allocated output (not computed for non-PBC)
+        vec_dtype=wp.vec3f,
+    )
+
+    # Neighbor list format (CSR) - periodic (PBC)
+    dftd3_pbc(
+        positions=positions_wp,
+        numbers=numbers_wp,
+        idx_j=idx_j_wp,
+        neighbor_ptr=neighbor_ptr_wp,
+        cell=cell_wp,  # REQUIRED for PBC
+        unit_shifts=unit_shifts_wp,  # REQUIRED for PBC
+        covalent_radii=covalent_radii_wp,
+        r4r2=r4r2_wp,
+        c6_reference=c6_reference_wp,
+        coord_num_ref=coord_num_ref_wp,
+        a1=0.3981, a2=4.4211, s8=1.9889,
+        coord_num=coord_num_wp,
+        forces=forces_wp,
+        energy=energy_wp,
+        virial=virial_wp,
+        vec_dtype=wp.vec3f,
+        compute_virial=True,  # Optional: enable virial computation
     )
 
 PyTorch Interface
@@ -176,15 +232,18 @@ import warp as wp
 
 __all__ = [
     # Warp launchers (framework-agnostic public API)
-    "dftd3_nm",
-    "dftd3_nl",
+    "dftd3_matrix",
+    "dftd3_matrix_pbc",
+    "dftd3",
+    "dftd3_pbc",
+    # Kernel overload dictionaries (for framework bindings)
     "_compute_cartesian_shifts_matrix_overload",
-    "_compute_cartesian_shifts_overload",
     "_cn_kernel_matrix_overload",
-    "_cn_kernel_overload",
     "_direct_forces_and_dE_dCN_kernel_matrix_overload",
-    "_direct_forces_and_dE_dCN_kernel_overload",
     "_cn_forces_contrib_kernel_matrix_overload",
+    "_compute_cartesian_shifts_overload",
+    "_cn_kernel_overload",
+    "_direct_forces_and_dE_dCN_kernel_overload",
     "_cn_forces_contrib_kernel_overload",
 ]
 
@@ -1647,48 +1706,46 @@ for t, v, m in zip(T, V, M):
 # ==============================================================================
 
 
-def dftd3_nm(
-    positions: wp.array(dtype=Any),
-    numbers: wp.array(dtype=wp.int32),
-    neighbor_matrix: wp.array2d(dtype=wp.int32),
-    covalent_radii: wp.array(dtype=wp.float32),
-    r4r2: wp.array(dtype=wp.float32),
-    c6_reference: wp.array4d(dtype=wp.float32),
-    coord_num_ref: wp.array4d(dtype=wp.float32),
+def dftd3_matrix(
+    positions: wp.array,
+    numbers: wp.array,
+    neighbor_matrix: wp.array,
+    covalent_radii: wp.array,
+    r4r2: wp.array,
+    c6_reference: wp.array,
+    coord_num_ref: wp.array,
     a1: float,
     a2: float,
     s8: float,
-    coord_num: wp.array(dtype=wp.float32),
-    forces: wp.array(dtype=wp.vec3f),
-    energy: wp.array(dtype=wp.float32),
-    virial: wp.array(dtype=wp.mat33f),
-    vec_dtype: Any,
+    coord_num: wp.array,
+    forces: wp.array,
+    energy: wp.array,
+    virial: wp.array,
+    vec_dtype: type,
     k1: float = 16.0,
     k3: float = -4.0,
     s6: float = 1.0,
-    s5_smoothing_on: float = 1e10,
-    s5_smoothing_off: float = 1e10,
+    s5_smoothing_on: float = 0.0,
+    s5_smoothing_off: float = 0.0,
     fill_value: int | None = None,
-    batch_idx: wp.array(dtype=wp.int32) | None = None,
-    cell: wp.array(dtype=Any) | None = None,
-    neighbor_matrix_shifts: wp.array2d(dtype=wp.vec3i) | None = None,
-    compute_virial: bool = False,
-    device: str | None = None,
+    batch_idx: wp.array | None = None,
 ) -> None:
     """
-    Launch DFT-D3(BJ) dispersion calculation using neighbor matrix format.
+    Launch DFT-D3(BJ) dispersion calculation using neighbor matrix format (non-periodic).
 
-    This is a framework-agnostic warp launcher that accepts warp arrays directly
-    and orchestrates the multi-pass kernel execution for DFT-D3(BJ) dispersion
-    energy, forces, and coordination number calculations. Framework-specific
-    wrappers (PyTorch, JAX) handle tensor-to-warp conversion and call this function.
+    This is a framework-agnostic warp launcher for non-periodic (non-PBC) systems
+    that accepts warp arrays directly and orchestrates the multi-pass kernel execution
+    for DFT-D3(BJ) dispersion energy, forces, and coordination number calculations.
+    Framework-specific wrappers (PyTorch, JAX) handle tensor-to-warp conversion and
+    call this function.
+
+    For periodic systems, use :func:`dftd3_matrix_pbc` instead.
 
     Multi-Pass Algorithm
     ---------------------
-    1. **Pass 0** (PBC only): Convert unit cell shifts to Cartesian coordinates
-    2. **Pass 1**: Compute coordination numbers using geometric counting function
-    3. **Pass 2**: Compute direct forces, energy, and accumulate dE/dCN
-    4. **Pass 3**: Add CN-dependent force contribution using chain rule
+    1. **Pass 1**: Compute coordination numbers using geometric counting function
+    2. **Pass 2**: Compute direct forces, energy, and accumulate dE/dCN
+    3. **Pass 3**: Add CN-dependent force contribution using chain rule
 
     Parameters
     ----------
@@ -1719,8 +1776,11 @@ def dftd3_nm(
         OUTPUT: Atomic forces in energy/distance units. Must be pre-allocated and zeroed.
     energy : wp.array(dtype=float32), shape [num_systems]
         OUTPUT: Dispersion energy in energy units. Must be pre-allocated and zeroed.
-    virial : wp.array(dtype=mat33f), shape [num_systems, 3, 3]
-        OUTPUT: Virial tensor in energy units. Must be pre-allocated and zeroed.
+    virial : wp.array(dtype=mat33f), shape [num_systems]
+        OUTPUT: Virial tensor (not computed for non-periodic systems). Must be
+        pre-allocated but will not be modified.
+    vec_dtype : type
+        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
     k1 : float, optional
         CN counting function steepness parameter, in inverse distance units
         (typically 16.0 1/Bohr). Default: 16.0
@@ -1730,21 +1790,249 @@ def dftd3_nm(
     s6 : float, optional
         C6 term scaling factor (typically 1.0, dimensionless). Default: 1.0
     s5_smoothing_on : float, optional
-        Distance where S5 switching begins, in same units as positions. Default: 1e10
+        Distance where S5 switching begins, in same units as positions. Default: 0.0
     s5_smoothing_off : float, optional
-        Distance where S5 switching completes, in same units as positions. Default: 1e10
+        Distance where S5 switching completes, in same units as positions. Default: 0.0
     fill_value : int or None, optional
         Value indicating padding in neighbor_matrix. If None, inferred from num_atoms.
     batch_idx : wp.array(dtype=int32), shape [num_atoms], or None, optional
         Batch indices. If None, all atoms are in a single system.
-    cell : wp.array(dtype=mat33f or mat33d), shape [num_systems, 3, 3], or None, optional
+
+    Returns
+    -------
+    None
+        All outputs are written to pre-allocated arrays (coord_num, forces, energy).
+
+    Notes
+    -----
+    - All output arrays must be pre-allocated and zeroed by the caller
+    - Supports float32 and float64 positions; outputs always float32
+    - Padding atoms indicated by numbers[i] == 0 are skipped
+    - **Two-body only**: Three-body Axilrod-Teller-Muto terms not included
+    - Unit consistency required: standard D3 parameters use atomic units
+      (Bohr for distances, Hartree for energy)
+    - Virial is NOT computed for non-periodic systems (use dftd3_matrix_pbc for PBC)
+
+    See Also
+    --------
+    dftd3_matrix_pbc : Neighbor matrix format with PBC support
+    dftd3 : Neighbor list (CSR) format, non-periodic
+    dftd3_pbc : Neighbor list (CSR) format with PBC support
+    """
+    # Get number of atoms from positions array
+    num_atoms = positions.shape[0]
+    max_neighbors = neighbor_matrix.shape[1] if num_atoms > 0 else 0
+    device = positions.device
+
+    # Set fill_value if not provided
+    if fill_value is None:
+        fill_value = num_atoms
+
+    # Handle empty case
+    if num_atoms == 0:
+        return
+
+    # Determine scalar dtype from vec_dtype
+    if vec_dtype == wp.vec3d:
+        wp_dtype = wp.float64
+    elif vec_dtype == wp.vec3f:
+        wp_dtype = wp.float32
+    else:
+        raise ValueError(
+            f"Unsupported vec_dtype: {vec_dtype}. Expected wp.vec3f or wp.vec3d"
+        )
+
+    # Precompute inv_w for S5 switching
+    if s5_smoothing_off > s5_smoothing_on:
+        inv_w = 1.0 / (s5_smoothing_off - s5_smoothing_on)
+    else:
+        inv_w = 0.0
+
+    # Non-periodic: create zero shifts array (not used but need correct shape for kernel)
+    periodic = False
+    cartesian_shifts = wp.zeros(
+        (num_atoms, max_neighbors),
+        dtype=vec_dtype,
+        device=device,
+    )
+
+    # Allocate dE_dCN array for chain rule computation (internal temporary)
+    dE_dCN = wp.zeros(num_atoms, dtype=wp.float32, device=device)  # NOSONAR (S125)
+
+    # Pass 1: Compute coordination numbers
+    wp.launch(
+        kernel=_cn_kernel_matrix_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            numbers,
+            neighbor_matrix,
+            cartesian_shifts,
+            covalent_radii,
+            wp.float32(k1),
+            wp.int32(fill_value),
+            periodic,
+        ],
+        outputs=[coord_num],
+        device=device,
+    )
+
+    # Pass 2: Compute direct forces, energy, and accumulate dE/dCN
+    # compute_virial=False for non-periodic systems
+    wp.launch(
+        kernel=_direct_forces_and_dE_dCN_kernel_matrix_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            numbers,
+            neighbor_matrix,
+            cartesian_shifts,
+            coord_num,
+            r4r2,
+            c6_reference,
+            coord_num_ref,
+            wp.float32(k3),
+            wp.float32(a1),
+            wp.float32(a2),
+            wp.float32(s6),
+            wp.float32(s8),
+            wp.float32(s5_smoothing_on),
+            wp.float32(s5_smoothing_off),
+            wp.float32(inv_w),
+            wp.int32(fill_value),
+            periodic,
+            batch_idx,
+            False,  # compute_virial=False for non-periodic
+        ],
+        outputs=[dE_dCN, forces, energy, virial],
+        device=device,
+    )
+
+    # Pass 3: Add CN-dependent force contribution
+    wp.launch(
+        kernel=_cn_forces_contrib_kernel_matrix_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            numbers,
+            neighbor_matrix,
+            cartesian_shifts,
+            covalent_radii,
+            dE_dCN,
+            wp.float32(k1),
+            wp.int32(fill_value),
+            periodic,
+            batch_idx,
+            False,  # compute_virial=False for non-periodic
+        ],
+        outputs=[forces, virial],
+        device=device,
+    )
+
+
+def dftd3_matrix_pbc(
+    positions: wp.array,
+    numbers: wp.array,
+    neighbor_matrix: wp.array,
+    cell: wp.array,
+    neighbor_matrix_shifts: wp.array,
+    covalent_radii: wp.array,
+    r4r2: wp.array,
+    c6_reference: wp.array,
+    coord_num_ref: wp.array,
+    a1: float,
+    a2: float,
+    s8: float,
+    coord_num: wp.array,
+    forces: wp.array,
+    energy: wp.array,
+    virial: wp.array,
+    vec_dtype: type,
+    k1: float = 16.0,
+    k3: float = -4.0,
+    s6: float = 1.0,
+    s5_smoothing_on: float = 0.0,
+    s5_smoothing_off: float = 0.0,
+    fill_value: int | None = None,
+    batch_idx: wp.array | None = None,
+    compute_virial: bool = False,
+) -> None:
+    """
+    Launch DFT-D3(BJ) dispersion calculation using neighbor matrix format with PBC.
+
+    This is a framework-agnostic warp launcher for periodic boundary condition (PBC)
+    systems that accepts warp arrays directly and orchestrates the multi-pass kernel
+    execution for DFT-D3(BJ) dispersion energy, forces, virial, and coordination
+    number calculations. Framework-specific wrappers (PyTorch, JAX) handle
+    tensor-to-warp conversion and call this function.
+
+    For non-periodic systems, use :func:`dftd3_matrix` instead.
+
+    Multi-Pass Algorithm
+    ---------------------
+    1. **Pass 0**: Convert unit cell shifts to Cartesian coordinates
+    2. **Pass 1**: Compute coordination numbers using geometric counting function
+    3. **Pass 2**: Compute direct forces, energy, and accumulate dE/dCN
+    4. **Pass 3**: Add CN-dependent force contribution using chain rule
+
+    Parameters
+    ----------
+    positions : wp.array(dtype=vec3f or vec3d), shape [num_atoms]
+        Atomic coordinates in consistent distance units (typically Bohr). Supports
+        both float32 (vec3f) and float64 (vec3d) precision.
+    numbers : wp.array(dtype=int32), shape [num_atoms]
+        Atomic numbers
+    neighbor_matrix : wp.array2d(dtype=int32), shape [num_atoms, max_neighbors]
+        Neighbor indices. Padding entries have values >= fill_value.
+    cell : wp.array(dtype=mat33f or mat33d), shape [num_systems]
         Unit cell lattice vectors for PBC, in same dtype/units as positions.
-    neighbor_matrix_shifts : wp.array2d(dtype=vec3i), shape [num_atoms, max_neighbors], or None, optional
-        Integer unit cell shifts for PBC.
+        Convention: cell[s, i, :] is the i-th lattice vector for system s (row vectors).
+    neighbor_matrix_shifts : wp.array2d(dtype=vec3i), shape [num_atoms, max_neighbors]
+        Integer unit cell shifts for PBC. shift[i, k] is the shift for the k-th
+        neighbor of atom i.
+    covalent_radii : wp.array(dtype=float32), shape [max_Z+1]
+        Covalent radii indexed by atomic number, in same units as positions
+    r4r2 : wp.array(dtype=float32), shape [max_Z+1]
+        <r⁴>/<r²> expectation values for C8 computation (dimensionless)
+    c6_reference : wp.array4d(dtype=float32), shape [max_Z+1, max_Z+1, 5, 5]
+        C6 reference values in energy x distance^6 units
+    coord_num_ref : wp.array4d(dtype=float32), shape [max_Z+1, max_Z+1, 5, 5]
+        CN reference grid (dimensionless)
+    a1 : float
+        Becke-Johnson damping parameter 1 (functional-dependent, dimensionless)
+    a2 : float
+        Becke-Johnson damping parameter 2 (functional-dependent), in same units as positions
+    s8 : float
+        C8 term scaling factor (functional-dependent, dimensionless)
+    coord_num : wp.array(dtype=float32), shape [num_atoms]
+        OUTPUT: Coordination numbers (dimensionless). Must be pre-allocated and zeroed.
+    forces : wp.array(dtype=vec3f), shape [num_atoms]
+        OUTPUT: Atomic forces in energy/distance units. Must be pre-allocated and zeroed.
+    energy : wp.array(dtype=float32), shape [num_systems]
+        OUTPUT: Dispersion energy in energy units. Must be pre-allocated and zeroed.
+    virial : wp.array(dtype=mat33f), shape [num_systems]
+        OUTPUT: Virial tensor in energy units. Must be pre-allocated and zeroed.
+        Only computed if compute_virial=True.
+    vec_dtype : type
+        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
+    k1 : float, optional
+        CN counting function steepness parameter, in inverse distance units
+        (typically 16.0 1/Bohr). Default: 16.0
+    k3 : float, optional
+        CN interpolation Gaussian width parameter (typically -4.0, dimensionless).
+        Default: -4.0
+    s6 : float, optional
+        C6 term scaling factor (typically 1.0, dimensionless). Default: 1.0
+    s5_smoothing_on : float, optional
+        Distance where S5 switching begins, in same units as positions. Default: 0.0
+    s5_smoothing_off : float, optional
+        Distance where S5 switching completes, in same units as positions. Default: 0.0
+    fill_value : int or None, optional
+        Value indicating padding in neighbor_matrix. If None, inferred from num_atoms.
+    batch_idx : wp.array(dtype=int32), shape [num_atoms], or None, optional
+        Batch indices. If None, all atoms are in a single system.
     compute_virial : bool, optional
         If True, compute virial tensor. Default: False
-    device : str or None, optional
-        Warp device string (e.g., 'cuda:0', 'cpu'). If None, inferred from positions.
 
     Returns
     -------
@@ -1762,15 +2050,14 @@ def dftd3_nm(
 
     See Also
     --------
-    dftd3_nl : Neighbor list (CSR) format variant
-    _compute_cartesian_shifts_matrix : Pass 0 kernel
-    _cn_kernel_matrix : Pass 1 kernel
-    _direct_forces_and_dE_dCN_kernel_matrix : Pass 2 kernel
-    _cn_forces_contrib_kernel_matrix : Pass 3 kernel
+    dftd3_matrix : Neighbor matrix format, non-periodic
+    dftd3 : Neighbor list (CSR) format, non-periodic
+    dftd3_pbc : Neighbor list (CSR) format with PBC support
     """
     # Get number of atoms from positions array
     num_atoms = positions.shape[0]
     max_neighbors = neighbor_matrix.shape[1] if num_atoms > 0 else 0
+    device = positions.device
 
     # Set fill_value if not provided
     if fill_value is None:
@@ -1780,11 +2067,7 @@ def dftd3_nm(
     if num_atoms == 0:
         return
 
-    # Infer device from positions if not provided
-    if device is None:
-        device = str(positions.device)
-
-    # Determine scalar dtype from vec_dtype (explicitly passed by wrapper)
+    # Determine scalar dtype from vec_dtype
     if vec_dtype == wp.vec3d:
         wp_dtype = wp.float64
     elif vec_dtype == wp.vec3f:
@@ -1800,37 +2083,27 @@ def dftd3_nm(
     else:
         inv_w = 0.0
 
-    # Pass 0: Handle PBC - determine if periodic and compute cartesian shifts
-    if cell is not None and neighbor_matrix_shifts is not None:
-        periodic = True
-        # Allocate cartesian_shifts array [num_atoms, max_neighbors, 3]
-        cartesian_shifts = wp.zeros(
-            (num_atoms, max_neighbors),
-            dtype=vec_dtype,
-            device=device,
-        )
+    # Pass 0: Compute cartesian shifts from unit cell shifts
+    periodic = True
+    cartesian_shifts = wp.zeros(
+        (num_atoms, max_neighbors),
+        dtype=vec_dtype,
+        device=device,
+    )
 
-        wp.launch(
-            kernel=_compute_cartesian_shifts_matrix_overload[wp_dtype],
-            dim=(num_atoms, max_neighbors),
-            inputs=[
-                cell,
-                neighbor_matrix_shifts,
-                neighbor_matrix,
-                batch_idx,
-                wp.int32(fill_value),
-            ],
-            outputs=[cartesian_shifts],
-            device=device,
-        )
-    else:
-        periodic = False
-        # Create zero shifts array (not used but need correct shape for kernel)
-        cartesian_shifts = wp.zeros(
-            (num_atoms, max_neighbors),
-            dtype=vec_dtype,
-            device=device,
-        )
+    wp.launch(
+        kernel=_compute_cartesian_shifts_matrix_overload[wp_dtype],
+        dim=(num_atoms, max_neighbors),
+        inputs=[
+            cell,
+            neighbor_matrix_shifts,
+            neighbor_matrix,
+            batch_idx,
+            wp.int32(fill_value),
+        ],
+        outputs=[cartesian_shifts],
+        device=device,
+    )
 
     # Allocate dE_dCN array for chain rule computation (internal temporary)
     dE_dCN = wp.zeros(num_atoms, dtype=wp.float32, device=device)  # NOSONAR (S125)
@@ -1877,7 +2150,7 @@ def dftd3_nm(
             wp.int32(fill_value),
             periodic,
             batch_idx,
-            wp.bool(compute_virial),
+            compute_virial,
         ],
         outputs=[dE_dCN, forces, energy, virial],
         device=device,
@@ -1898,56 +2171,53 @@ def dftd3_nm(
             wp.int32(fill_value),
             periodic,
             batch_idx,
-            wp.bool(compute_virial),
+            compute_virial,
         ],
         outputs=[forces, virial],
         device=device,
     )
 
 
-def dftd3_nl(
-    positions: wp.array(dtype=Any),
-    numbers: wp.array(dtype=wp.int32),
-    idx_j: wp.array(dtype=wp.int32),
-    neighbor_ptr: wp.array(dtype=wp.int32),
-    covalent_radii: wp.array(dtype=wp.float32),
-    r4r2: wp.array(dtype=wp.float32),
-    c6_reference: wp.array4d(dtype=wp.float32),
-    coord_num_ref: wp.array4d(dtype=wp.float32),
+def dftd3(
+    positions: wp.array,
+    numbers: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    covalent_radii: wp.array,
+    r4r2: wp.array,
+    c6_reference: wp.array,
+    coord_num_ref: wp.array,
     a1: float,
     a2: float,
     s8: float,
-    coord_num: wp.array(dtype=wp.float32),
-    forces: wp.array(dtype=wp.vec3f),
-    energy: wp.array(dtype=wp.float32),
-    virial: wp.array(dtype=wp.mat33f),
-    vec_dtype: Any,
+    coord_num: wp.array,
+    forces: wp.array,
+    energy: wp.array,
+    virial: wp.array,
+    vec_dtype: type,
     k1: float = 16.0,
     k3: float = -4.0,
     s6: float = 1.0,
-    s5_smoothing_on: float = 1e10,
-    s5_smoothing_off: float = 1e10,
-    batch_idx: wp.array(dtype=wp.int32) | None = None,
-    cell: wp.array(dtype=Any) | None = None,
-    unit_shifts: wp.array(dtype=wp.vec3i) | None = None,
-    compute_virial: bool = False,
-    device: str | None = None,
+    s5_smoothing_on: float = 0.0,
+    s5_smoothing_off: float = 0.0,
+    batch_idx: wp.array | None = None,
 ) -> None:
     """
-    Launch DFT-D3(BJ) dispersion calculation using neighbor list (CSR) format.
+    Launch DFT-D3(BJ) dispersion calculation using neighbor list (CSR) format (non-periodic).
 
-    This is a framework-agnostic warp launcher that accepts warp arrays directly
-    and orchestrates the multi-pass kernel execution for DFT-D3(BJ) dispersion
-    energy, forces, and coordination number calculations using CSR (Compressed
-    Sparse Row) neighbor list format. Framework-specific wrappers (PyTorch, JAX)
-    handle tensor-to-warp conversion and call this function.
+    This is a framework-agnostic warp launcher for non-periodic (non-PBC) systems
+    that accepts warp arrays directly and orchestrates the multi-pass kernel execution
+    for DFT-D3(BJ) dispersion energy, forces, and coordination number calculations
+    using CSR (Compressed Sparse Row) neighbor list format. Framework-specific
+    wrappers (PyTorch, JAX) handle tensor-to-warp conversion and call this function.
+
+    For periodic systems, use :func:`dftd3_pbc` instead.
 
     Multi-Pass Algorithm
     ---------------------
-    1. **Pass 0** (PBC only): Convert unit cell shifts to Cartesian coordinates
-    2. **Pass 1**: Compute coordination numbers using geometric counting function
-    3. **Pass 2**: Compute direct forces, energy, and accumulate dE/dCN
-    4. **Pass 3**: Add CN-dependent force contribution using chain rule
+    1. **Pass 1**: Compute coordination numbers using geometric counting function
+    2. **Pass 2**: Compute direct forces, energy, and accumulate dE/dCN
+    3. **Pass 3**: Add CN-dependent force contribution using chain rule
 
     Parameters
     ----------
@@ -1981,8 +2251,11 @@ def dftd3_nl(
         OUTPUT: Atomic forces in energy/distance units. Must be pre-allocated and zeroed.
     energy : wp.array(dtype=float32), shape [num_systems]
         OUTPUT: Dispersion energy in energy units. Must be pre-allocated and zeroed.
-    virial : wp.array(dtype=mat33f), shape [num_systems, 3, 3]
-        OUTPUT: Virial tensor in energy units. Must be pre-allocated and zeroed.
+    virial : wp.array(dtype=mat33f), shape [num_systems]
+        OUTPUT: Virial tensor (not computed for non-periodic systems). Must be
+        pre-allocated but will not be modified.
+    vec_dtype : type
+        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
     k1 : float, optional
         CN counting function steepness parameter, in inverse distance units
         (typically 16.0 1/Bohr). Default: 16.0
@@ -1992,56 +2265,45 @@ def dftd3_nl(
     s6 : float, optional
         C6 term scaling factor (typically 1.0, dimensionless). Default: 1.0
     s5_smoothing_on : float, optional
-        Distance where S5 switching begins, in same units as positions. Default: 1e10
+        Distance where S5 switching begins, in same units as positions. Default: 0.0
     s5_smoothing_off : float, optional
-        Distance where S5 switching completes, in same units as positions. Default: 1e10
+        Distance where S5 switching completes, in same units as positions. Default: 0.0
     batch_idx : wp.array(dtype=int32), shape [num_atoms], or None, optional
         Batch indices. If None, all atoms are in a single system.
-    cell : wp.array(dtype=mat33f or mat33d), shape [num_systems, 3, 3], or None, optional
-        Unit cell lattice vectors for PBC, in same dtype/units as positions.
-    unit_shifts : wp.array(dtype=vec3i), shape [num_edges], or None, optional
-        Integer unit cell shifts for PBC
-    compute_virial : bool, optional
-        If True, compute virial tensor. Default: False
-    device : str or None, optional
-        Warp device string (e.g., 'cuda:0', 'cpu'). If None, inferred from positions.
 
     Returns
     -------
     None
-        All outputs are written to pre-allocated arrays (coord_num, forces, energy, virial).
+        All outputs are written to pre-allocated arrays (coord_num, forces, energy).
+        Virial is not computed for non-periodic systems.
 
     Notes
     -----
     - All output arrays must be pre-allocated and zeroed by the caller
-    - Supports float32 and float64 positions/cell; outputs always float32
+    - Supports float32 and float64 positions; outputs always float32
     - Padding atoms indicated by numbers[i] == 0 are skipped
     - **Two-body only**: Three-body Axilrod-Teller-Muto terms not included
     - Unit consistency required: standard D3 parameters use atomic units
       (Bohr for distances, Hartree for energy)
     - CSR format is more memory-efficient for sparse neighbor lists
+    - Virial is NOT computed for non-periodic systems (use dftd3_pbc for PBC)
 
     See Also
     --------
-    dftd3_nm : Neighbor matrix format variant
-    _compute_cartesian_shifts : Pass 0 kernel
-    _cn_kernel : Pass 1 kernel
-    _direct_forces_and_dE_dCN_kernel : Pass 2 kernel
-    _cn_forces_contrib_kernel : Pass 3 kernel
+    dftd3_pbc : Neighbor list (CSR) format with PBC support
+    dftd3_matrix : Neighbor matrix format, non-periodic
+    dftd3_matrix_pbc : Neighbor matrix format with PBC support
     """
     # Get number of atoms and edges
     num_atoms = positions.shape[0]
     num_edges = idx_j.shape[0]
+    device = positions.device
 
     # Handle empty case
     if num_atoms == 0 or num_edges == 0:
         return
 
-    # Infer device from positions if not provided
-    if device is None:
-        device = str(positions.device)
-
-    # Determine scalar dtype from vec_dtype (explicitly passed by wrapper)
+    # Determine scalar dtype from vec_dtype
     if vec_dtype == wp.vec3d:
         wp_dtype = wp.float64
     elif vec_dtype == wp.vec3f:
@@ -2057,36 +2319,259 @@ def dftd3_nl(
     else:
         inv_w = 0.0
 
-    # Pass 0: Handle PBC - compute cartesian shifts if needed
-    if unit_shifts is not None and cell is not None:
-        periodic = True
-        # Allocate cartesian_shifts array [num_edges, 3]
-        cartesian_shifts = wp.zeros(
-            num_edges,
-            dtype=vec_dtype,
-            device=device,
+    # Non-periodic: create zero shifts array (not used but need correct shape for kernel)
+    periodic = False
+    cartesian_shifts = wp.zeros(
+        num_edges,
+        dtype=vec_dtype,
+        device=device,
+    )
+
+    # Allocate dE_dCN array for chain rule computation (internal temporary)
+    dE_dCN = wp.zeros(num_atoms, dtype=wp.float32, device=device)  # NOSONAR (S125)
+
+    # Pass 1: Compute coordination numbers
+    wp.launch(
+        kernel=_cn_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            numbers,
+            idx_j,
+            neighbor_ptr,
+            cartesian_shifts,
+            covalent_radii,
+            wp.float32(k1),
+            periodic,
+        ],
+        outputs=[coord_num],
+        device=device,
+    )
+
+    # Pass 2: Compute direct forces, energy, and accumulate dE/dCN
+    # compute_virial=False for non-periodic systems
+    wp.launch(
+        kernel=_direct_forces_and_dE_dCN_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            numbers,
+            idx_j,
+            neighbor_ptr,
+            cartesian_shifts,
+            coord_num,
+            r4r2,
+            c6_reference,
+            coord_num_ref,
+            wp.float32(k3),
+            wp.float32(a1),
+            wp.float32(a2),
+            wp.float32(s6),
+            wp.float32(s8),
+            wp.float32(s5_smoothing_on),
+            wp.float32(s5_smoothing_off),
+            wp.float32(inv_w),
+            periodic,
+            batch_idx,
+            False,  # compute_virial=False for non-periodic
+        ],
+        outputs=[dE_dCN, forces, energy, virial],
+        device=device,
+    )
+
+    # Pass 3: Add CN-dependent force contribution
+    wp.launch(
+        kernel=_cn_forces_contrib_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            numbers,
+            idx_j,
+            neighbor_ptr,
+            cartesian_shifts,
+            covalent_radii,
+            dE_dCN,
+            wp.float32(k1),
+            periodic,
+            batch_idx,
+            False,  # compute_virial=False for non-periodic
+        ],
+        outputs=[forces, virial],
+        device=device,
+    )
+
+
+def dftd3_pbc(
+    positions: wp.array,
+    numbers: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    cell: wp.array,
+    unit_shifts: wp.array,
+    covalent_radii: wp.array,
+    r4r2: wp.array,
+    c6_reference: wp.array,
+    coord_num_ref: wp.array,
+    a1: float,
+    a2: float,
+    s8: float,
+    coord_num: wp.array,
+    forces: wp.array,
+    energy: wp.array,
+    virial: wp.array,
+    vec_dtype: type,
+    k1: float = 16.0,
+    k3: float = -4.0,
+    s6: float = 1.0,
+    s5_smoothing_on: float = 0.0,
+    s5_smoothing_off: float = 0.0,
+    batch_idx: wp.array | None = None,
+    compute_virial: bool = False,
+) -> None:
+    """
+    Launch DFT-D3(BJ) dispersion calculation using neighbor list (CSR) format with PBC.
+
+    This is a framework-agnostic warp launcher for periodic boundary condition (PBC)
+    systems that accepts warp arrays directly and orchestrates the multi-pass kernel
+    execution for DFT-D3(BJ) dispersion energy, forces, virial, and coordination
+    number calculations using CSR (Compressed Sparse Row) neighbor list format.
+    Framework-specific wrappers (PyTorch, JAX) handle tensor-to-warp conversion
+    and call this function.
+
+    For non-periodic systems, use :func:`dftd3` instead.
+
+    Multi-Pass Algorithm
+    ---------------------
+    1. **Pass 0**: Convert unit cell shifts to Cartesian coordinates
+    2. **Pass 1**: Compute coordination numbers using geometric counting function
+    3. **Pass 2**: Compute direct forces, energy, and accumulate dE/dCN
+    4. **Pass 3**: Add CN-dependent force contribution using chain rule
+
+    Parameters
+    ----------
+    positions : wp.array(dtype=vec3f or vec3d), shape [num_atoms]
+        Atomic coordinates in consistent distance units (typically Bohr). Supports
+        both float32 (vec3f) and float64 (vec3d) precision.
+    numbers : wp.array(dtype=int32), shape [num_atoms]
+        Atomic numbers
+    idx_j : wp.array(dtype=int32), shape [num_edges]
+        Destination atom indices in CSR format
+    neighbor_ptr : wp.array(dtype=int32), shape [num_atoms+1]
+        CSR row pointers where neighbor_ptr[i]:neighbor_ptr[i+1]
+        gives the range of neighbors for atom i
+    cell : wp.array(dtype=mat33f or mat33d), shape [num_systems]
+        Unit cell lattice vectors for PBC, in same dtype/units as positions.
+        Convention: cell[s, i, :] is the i-th lattice vector for system s (row vectors).
+    unit_shifts : wp.array(dtype=vec3i), shape [num_edges]
+        Integer unit cell shifts for PBC. shift[e] is the shift for edge e.
+    covalent_radii : wp.array(dtype=float32), shape [max_Z+1]
+        Covalent radii indexed by atomic number, in same units as positions
+    r4r2 : wp.array(dtype=float32), shape [max_Z+1]
+        <r⁴>/<r²> expectation values for C8 computation (dimensionless)
+    c6_reference : wp.array4d(dtype=float32), shape [max_Z+1, max_Z+1, 5, 5]
+        C6 reference values in energy x distance^6 units
+    coord_num_ref : wp.array4d(dtype=float32), shape [max_Z+1, max_Z+1, 5, 5]
+        CN reference grid (dimensionless)
+    a1 : float
+        Becke-Johnson damping parameter 1 (functional-dependent, dimensionless)
+    a2 : float
+        Becke-Johnson damping parameter 2 (functional-dependent), in same units as positions
+    s8 : float
+        C8 term scaling factor (functional-dependent, dimensionless)
+    coord_num : wp.array(dtype=float32), shape [num_atoms]
+        OUTPUT: Coordination numbers (dimensionless). Must be pre-allocated and zeroed.
+    forces : wp.array(dtype=vec3f), shape [num_atoms]
+        OUTPUT: Atomic forces in energy/distance units. Must be pre-allocated and zeroed.
+    energy : wp.array(dtype=float32), shape [num_systems]
+        OUTPUT: Dispersion energy in energy units. Must be pre-allocated and zeroed.
+    virial : wp.array(dtype=mat33f), shape [num_systems]
+        OUTPUT: Virial tensor in energy units. Must be pre-allocated and zeroed.
+        Only computed if compute_virial=True.
+    vec_dtype : type
+        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
+    k1 : float, optional
+        CN counting function steepness parameter, in inverse distance units
+        (typically 16.0 1/Bohr). Default: 16.0
+    k3 : float, optional
+        CN interpolation Gaussian width parameter (typically -4.0, dimensionless).
+        Default: -4.0
+    s6 : float, optional
+        C6 term scaling factor (typically 1.0, dimensionless). Default: 1.0
+    s5_smoothing_on : float, optional
+        Distance where S5 switching begins, in same units as positions. Default: 0.0
+    s5_smoothing_off : float, optional
+        Distance where S5 switching completes, in same units as positions. Default: 0.0
+    batch_idx : wp.array(dtype=int32), shape [num_atoms], or None, optional
+        Batch indices. If None, all atoms are in a single system.
+    compute_virial : bool, optional
+        If True, compute virial tensor. Default: False
+
+    Returns
+    -------
+    None
+        All outputs are written to pre-allocated arrays (coord_num, forces, energy, virial).
+
+    Notes
+    -----
+    - All output arrays must be pre-allocated and zeroed by the caller
+    - Supports float32 and float64 positions/cell; outputs always float32
+    - Padding atoms indicated by numbers[i] == 0 are skipped
+    - **Two-body only**: Three-body Axilrod-Teller-Muto terms not included
+    - Unit consistency required: standard D3 parameters use atomic units
+      (Bohr for distances, Hartree for energy)
+
+    See Also
+    --------
+    dftd3 : Neighbor list (CSR) format, non-periodic
+    dftd3_matrix : Neighbor matrix format, non-periodic
+    dftd3_matrix_pbc : Neighbor matrix format with PBC support
+    """
+    # Get number of atoms and edges
+    num_atoms = positions.shape[0]
+    num_edges = idx_j.shape[0]
+    device = positions.device
+
+    # Handle empty case
+    if num_atoms == 0 or num_edges == 0:
+        return
+
+    # Determine scalar dtype from vec_dtype
+    # TODO: make this determined from positions
+    if vec_dtype == wp.vec3d:
+        wp_dtype = wp.float64
+    elif vec_dtype == wp.vec3f:
+        wp_dtype = wp.float32
+    else:
+        raise ValueError(
+            f"Unsupported vec_dtype: {vec_dtype}. Expected wp.vec3f or wp.vec3d"
         )
 
-        wp.launch(
-            kernel=_compute_cartesian_shifts_overload[wp_dtype],
-            dim=num_atoms,
-            inputs=[
-                cell,
-                unit_shifts,
-                neighbor_ptr,
-                batch_idx,
-            ],
-            outputs=[cartesian_shifts],
-            device=device,
-        )
+    # Precompute inv_w for S5 switching
+    if s5_smoothing_off > s5_smoothing_on:
+        inv_w = 1.0 / (s5_smoothing_off - s5_smoothing_on)
     else:
-        periodic = False
-        # Create zero shifts array (not used but need correct shape for kernel)
-        cartesian_shifts = wp.zeros(
-            num_edges,
-            dtype=vec_dtype,
-            device=device,
-        )
+        inv_w = 0.0
+
+    # Pass 0: Compute cartesian shifts from unit cell shifts
+    periodic = True
+    cartesian_shifts = wp.zeros(
+        num_edges,
+        dtype=vec_dtype,
+        device=device,
+    )
+
+    wp.launch(
+        kernel=_compute_cartesian_shifts_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            cell,
+            unit_shifts,
+            neighbor_ptr,
+            batch_idx,
+        ],
+        outputs=[cartesian_shifts],
+        device=device,
+    )
 
     # Allocate dE_dCN array for chain rule computation (internal temporary)
     dE_dCN = wp.zeros(num_atoms, dtype=wp.float32, device=device)  # NOSONAR (S125)
@@ -2133,7 +2618,7 @@ def dftd3_nl(
             wp.float32(inv_w),
             periodic,
             batch_idx,
-            wp.bool(compute_virial),
+            compute_virial,
         ],
         outputs=[dE_dCN, forces, energy, virial],
         device=device,
@@ -2154,7 +2639,7 @@ def dftd3_nl(
             wp.float32(k1),
             periodic,
             batch_idx,
-            wp.bool(compute_virial),
+            compute_virial,
         ],
         outputs=[forces, virial],
         device=device,

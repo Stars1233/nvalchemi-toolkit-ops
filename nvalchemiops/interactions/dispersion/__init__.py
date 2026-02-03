@@ -24,7 +24,12 @@ from __future__ import annotations
 import importlib
 import warnings
 
-from nvalchemiops.interactions.dispersion._dftd3 import dftd3_nl, dftd3_nm
+from nvalchemiops.interactions.dispersion._dftd3 import dftd3 as wp_dftd3
+from nvalchemiops.interactions.dispersion._dftd3 import (
+    dftd3_matrix,
+    dftd3_matrix_pbc,
+    dftd3_pbc,
+)
 
 
 def __getattr__(name: str):  # pragma: no cover
@@ -92,7 +97,9 @@ def __getattr__(name: str):  # pragma: no cover
 
 
 __all__ = [
-    "dftd3_nm",
-    "dftd3_nl",
+    "dftd3_matrix",
+    "dftd3_matrix_pbc",
     "dftd3",
+    "wp_dftd3",
+    "dftd3_pbc",
 ]
