@@ -15,7 +15,7 @@
 """
 Core warp launcher tests for DFT-D3 implementation.
 
-This test suite focuses on the core warp launchers (dftd3_nm, dftd3_nl)
+This test suite focuses on the core warp launchers (dftd3_matrix, dftd3)
 and includes:
 - S5 switching function tests
 - Warp launcher interface tests
@@ -35,8 +35,8 @@ import warp as wp
 
 from nvalchemiops.interactions.dispersion._dftd3 import (
     _s5_switch,
-    dftd3_nl,
-    dftd3_nm,
+    dftd3,
+    dftd3_matrix,
 )
 from test.interactions.dispersion.conftest import from_warp, to_warp
 
@@ -79,7 +79,7 @@ def neighbor_matrix_to_csr(
     return idx_j, neighbor_ptr
 
 
-def run_dftd3_nm(
+def run_dftd3_matrix(
     system: dict,
     element_tables: dict,
     functional_params: dict,
@@ -88,7 +88,7 @@ def run_dftd3_nm(
     vec_dtype=wp.vec3f,
 ) -> dict:
     """
-    Run dftd3_nm warp launcher for a system.
+    Run dftd3_matrix warp launcher for a system.
 
     Parameters
     ----------
@@ -153,7 +153,7 @@ def run_dftd3_nm(
     virial_wp = wp.zeros(num_systems, dtype=wp.mat33f, device=device)
 
     # Call warp launcher
-    dftd3_nm(
+    dftd3_matrix(
         positions=positions,
         numbers=numbers_wp,
         neighbor_matrix=neighbor_matrix_wp,
@@ -173,7 +173,6 @@ def run_dftd3_nm(
         k3=functional_params["k3"],
         s6=functional_params["s6"],
         batch_idx=batch_idx_wp,
-        device=device,
     )
 
     # Convert back to numpy
@@ -184,7 +183,7 @@ def run_dftd3_nm(
     }
 
 
-def run_dftd3_nl(
+def run_dftd3(
     system: dict,
     element_tables: dict,
     functional_params: dict,
@@ -193,7 +192,7 @@ def run_dftd3_nl(
     vec_dtype=wp.vec3f,
 ) -> dict:
     """
-    Run dftd3_nl warp launcher for a system (neighbor list / CSR format).
+    Run dftd3 warp launcher for a system (neighbor list / CSR format).
 
     Parameters
     ----------
@@ -263,7 +262,7 @@ def run_dftd3_nl(
     virial_wp = wp.zeros(num_systems, dtype=wp.mat33f, device=device)
 
     # Call warp launcher
-    dftd3_nl(
+    dftd3(
         positions=positions,
         numbers=numbers_wp,
         idx_j=idx_j_wp,
@@ -284,7 +283,6 @@ def run_dftd3_nl(
         k3=functional_params["k3"],
         s6=functional_params["s6"],
         batch_idx=batch_idx_wp,
-        device=device,
     )
 
     # Convert back to numpy
@@ -391,8 +389,8 @@ class TestS5Switch:
 # ==============================================================================
 
 
-class TestWarpLauncherNeighborMatrix:
-    """Test dftd3_nm warp launcher interface."""
+class TestWarpLauncherMatrix:
+    """Test dftd3_matrix warp launcher interface."""
 
     @pytest.mark.usefixtures("h2_system", "element_tables", "device")
     def test_basic_h2(self, request):
@@ -410,7 +408,7 @@ class TestWarpLauncherNeighborMatrix:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nm(h2_system, element_tables, functional_params, device)
+        results = run_dftd3_matrix(h2_system, element_tables, functional_params, device)
 
         # Basic checks
         assert results["energy"].shape == (1,)
@@ -445,7 +443,7 @@ class TestWarpLauncherNeighborMatrix:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nm(
+        results = run_dftd3_matrix(
             h2_system,
             element_tables,
             functional_params,
@@ -491,7 +489,7 @@ class TestWarpLauncherNeighborMatrix:
         batch_idx_wp = wp.zeros(0, dtype=wp.int32, device=device)
 
         # Should not crash with empty system
-        dftd3_nm(
+        dftd3_matrix(
             positions=positions_wp,
             numbers=numbers_wp,
             neighbor_matrix=neighbor_matrix_wp,
@@ -508,7 +506,6 @@ class TestWarpLauncherNeighborMatrix:
             virial=virial_wp,
             vec_dtype=wp.vec3f,
             batch_idx=batch_idx_wp,
-            device=device,
         )
 
         energy = from_warp(energy_wp)
@@ -539,7 +536,7 @@ class TestRegression:
         functional_params = request.getfixturevalue("functional_params")
         device = request.getfixturevalue("device")
 
-        results = run_dftd3_nm(system, element_tables, functional_params, device)
+        results = run_dftd3_matrix(system, element_tables, functional_params, device)
 
         # Basic sanity checks
         assert np.isfinite(results["energy"]).all()
@@ -571,7 +568,9 @@ class TestRegression:
         device = request.getfixturevalue("device")
         ne2_reference_cpu = request.getfixturevalue("ne2_reference_cpu")
 
-        results = run_dftd3_nm(ne2_system, element_tables, functional_params, device)
+        results = run_dftd3_matrix(
+            ne2_system, element_tables, functional_params, device
+        )
 
         # Compare against reference values from conftest.py
         reference = ne2_reference_cpu
@@ -621,7 +620,7 @@ class TestRegression:
         device = request.getfixturevalue("device")
         hcl_dimer_reference_cpu = request.getfixturevalue("hcl_dimer_reference_cpu")
 
-        results = run_dftd3_nm(
+        results = run_dftd3_matrix(
             hcl_dimer_system, element_tables, functional_params, device
         )
 
@@ -687,10 +686,10 @@ class TestCPUGPUConsistency:
         device_gpu = "cuda:0"
 
         # Run on both devices
-        results_cpu = run_dftd3_nm(
+        results_cpu = run_dftd3_matrix(
             system, element_tables, functional_params, device_cpu
         )
-        results_gpu = run_dftd3_nm(
+        results_gpu = run_dftd3_matrix(
             system, element_tables, functional_params, device_gpu
         )
 
@@ -733,7 +732,7 @@ class TestEdgeCases:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nm(
+        results = run_dftd3_matrix(
             single_atom_system, element_tables, functional_params, device
         )
 
@@ -770,7 +769,7 @@ class TestEdgeCases:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nm(system, element_tables, functional_params, device)
+        results = run_dftd3_matrix(system, element_tables, functional_params, device)
 
         # Should not produce NaN or Inf due to BJ damping
         assert np.isfinite(results["energy"]).all()
@@ -832,7 +831,7 @@ class TestBatching:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nm(
+        results = run_dftd3_matrix(
             system, element_tables, functional_params, device, batch_idx
         )
 
@@ -876,7 +875,7 @@ class TestShapes:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nm(h2_system, element_tables, functional_params, device)
+        results = run_dftd3_matrix(h2_system, element_tables, functional_params, device)
 
         assert results["energy"].shape == (1,)
         assert results["forces"].shape == (h2_system["B"], 3)
@@ -891,8 +890,8 @@ class TestShapes:
 # ==============================================================================
 
 
-class TestWarpLauncherNeighborList:
-    """Test dftd3_nl warp launcher interface (CSR neighbor list format)."""
+class TestWarpLauncherList:
+    """Test dftd3 warp launcher interface (CSR neighbor list format)."""
 
     @pytest.mark.usefixtures("h2_system", "element_tables", "device")
     def test_basic_h2(self, request):
@@ -910,7 +909,7 @@ class TestWarpLauncherNeighborList:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nl(h2_system, element_tables, functional_params, device)
+        results = run_dftd3(h2_system, element_tables, functional_params, device)
 
         # Basic checks
         assert results["energy"].shape == (1,)
@@ -945,7 +944,7 @@ class TestWarpLauncherNeighborList:
             "k3": -4.0,
         }
 
-        results = run_dftd3_nl(
+        results = run_dftd3(
             h2_system,
             element_tables,
             functional_params,
@@ -992,7 +991,7 @@ class TestWarpLauncherNeighborList:
         batch_idx_wp = wp.zeros(0, dtype=wp.int32, device=device)
 
         # Should not crash with empty system
-        dftd3_nl(
+        dftd3(
             positions=positions_wp,
             numbers=numbers_wp,
             idx_j=idx_j_wp,
@@ -1010,7 +1009,6 @@ class TestWarpLauncherNeighborList:
             virial=virial_wp,
             vec_dtype=wp.vec3f,
             batch_idx=batch_idx_wp,
-            device=device,
         )
 
         energy = from_warp(energy_wp)
@@ -1022,12 +1020,12 @@ class TestWarpLauncherNeighborList:
 # ==============================================================================
 
 
-class TestNeighborFormatConsistency:
+class TestFormatConsistency:
     """Test that neighbor matrix and neighbor list formats produce identical results."""
 
     @pytest.mark.usefixtures("h2_system", "element_tables", "device")
     def test_nm_nl_consistency_h2(self, request):
-        """Test that dftd3_nm and dftd3_nl produce identical results for H2."""
+        """Test that dftd3_matrix and dftd3 produce identical results for H2."""
         h2_system = request.getfixturevalue("h2_system")
         element_tables = request.getfixturevalue("element_tables")
         device = request.getfixturevalue("device")
@@ -1042,8 +1040,10 @@ class TestNeighborFormatConsistency:
         }
 
         # Run both methods
-        results_nm = run_dftd3_nm(h2_system, element_tables, functional_params, device)
-        results_nl = run_dftd3_nl(h2_system, element_tables, functional_params, device)
+        results_nm = run_dftd3_matrix(
+            h2_system, element_tables, functional_params, device
+        )
+        results_nl = run_dftd3(h2_system, element_tables, functional_params, device)
 
         # Compare outputs - should be identical
         np.testing.assert_allclose(
@@ -1072,15 +1072,17 @@ class TestNeighborFormatConsistency:
         "ne2_system", "element_tables", "functional_params", "device"
     )
     def test_nm_nl_consistency_ne2(self, request):
-        """Test that dftd3_nm and dftd3_nl produce identical results for Ne2."""
+        """Test that dftd3_matrix and dftd3 produce identical results for Ne2."""
         ne2_system = request.getfixturevalue("ne2_system")
         element_tables = request.getfixturevalue("element_tables")
         functional_params = request.getfixturevalue("functional_params")
         device = request.getfixturevalue("device")
 
         # Run both methods
-        results_nm = run_dftd3_nm(ne2_system, element_tables, functional_params, device)
-        results_nl = run_dftd3_nl(ne2_system, element_tables, functional_params, device)
+        results_nm = run_dftd3_matrix(
+            ne2_system, element_tables, functional_params, device
+        )
+        results_nl = run_dftd3(ne2_system, element_tables, functional_params, device)
 
         # Compare outputs - should be identical
         np.testing.assert_allclose(
@@ -1109,17 +1111,17 @@ class TestNeighborFormatConsistency:
         "hcl_dimer_system", "element_tables", "functional_params", "device"
     )
     def test_nm_nl_consistency_hcl_dimer(self, request):
-        """Test that dftd3_nm and dftd3_nl produce identical results for HCl dimer."""
+        """Test that dftd3_matrix and dftd3 produce identical results for HCl dimer."""
         hcl_dimer_system = request.getfixturevalue("hcl_dimer_system")
         element_tables = request.getfixturevalue("element_tables")
         functional_params = request.getfixturevalue("functional_params")
         device = request.getfixturevalue("device")
 
         # Run both methods
-        results_nm = run_dftd3_nm(
+        results_nm = run_dftd3_matrix(
             hcl_dimer_system, element_tables, functional_params, device
         )
-        results_nl = run_dftd3_nl(
+        results_nl = run_dftd3(
             hcl_dimer_system, element_tables, functional_params, device
         )
 
@@ -1152,7 +1154,7 @@ class TestNeighborFormatConsistency:
 # ==============================================================================
 
 
-class TestRegressionNeighborList:
+class TestRegressionList:
     """Regression tests for neighbor list format against reference outputs."""
 
     @pytest.mark.usefixtures(
@@ -1173,7 +1175,7 @@ class TestRegressionNeighborList:
         device = request.getfixturevalue("device")
         ne2_reference_cpu = request.getfixturevalue("ne2_reference_cpu")
 
-        results = run_dftd3_nl(ne2_system, element_tables, functional_params, device)
+        results = run_dftd3(ne2_system, element_tables, functional_params, device)
 
         # Compare against reference values from conftest.py
         reference = ne2_reference_cpu
@@ -1223,9 +1225,7 @@ class TestRegressionNeighborList:
         device = request.getfixturevalue("device")
         hcl_dimer_reference_cpu = request.getfixturevalue("hcl_dimer_reference_cpu")
 
-        results = run_dftd3_nl(
-            hcl_dimer_system, element_tables, functional_params, device
-        )
+        results = run_dftd3(hcl_dimer_system, element_tables, functional_params, device)
 
         # Compare against reference values from conftest.py
         reference = hcl_dimer_reference_cpu
@@ -1263,7 +1263,7 @@ class TestRegressionNeighborList:
 # ==============================================================================
 
 
-class TestCPUGPUConsistencyNeighborList:
+class TestCPUGPUConsistencyList:
     """CPU/GPU consistency tests for neighbor list format."""
 
     @pytest.mark.parametrize(
@@ -1289,12 +1289,8 @@ class TestCPUGPUConsistencyNeighborList:
         device_gpu = "cuda:0"
 
         # Run on both devices
-        results_cpu = run_dftd3_nl(
-            system, element_tables, functional_params, device_cpu
-        )
-        results_gpu = run_dftd3_nl(
-            system, element_tables, functional_params, device_gpu
-        )
+        results_cpu = run_dftd3(system, element_tables, functional_params, device_cpu)
+        results_gpu = run_dftd3(system, element_tables, functional_params, device_gpu)
 
         # Compare outputs
         np.testing.assert_allclose(
