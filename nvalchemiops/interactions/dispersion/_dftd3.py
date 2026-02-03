@@ -1721,7 +1721,8 @@ def dftd3_matrix(
     forces: wp.array,
     energy: wp.array,
     virial: wp.array,
-    vec_dtype: type,
+    wp_dtype: type,
+    device: str,
     k1: float = 16.0,
     k3: float = -4.0,
     s6: float = 1.0,
@@ -1779,8 +1780,10 @@ def dftd3_matrix(
     virial : wp.array(dtype=mat33f), shape [num_systems]
         OUTPUT: Virial tensor (not computed for non-periodic systems). Must be
         pre-allocated but will not be modified.
-    vec_dtype : type
-        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64) matching positions dtype.
+    device : str
+        Warp device string (e.g., 'cuda:0', 'cpu').
     k1 : float, optional
         CN counting function steepness parameter, in inverse distance units
         (typically 16.0 1/Bohr). Default: 16.0
@@ -1819,10 +1822,19 @@ def dftd3_matrix(
     dftd3 : Neighbor list (CSR) format, non-periodic
     dftd3_pbc : Neighbor list (CSR) format with PBC support
     """
+    # Derive vector dtype from scalar dtype
+    if wp_dtype == wp.float64:
+        vec_dtype = wp.vec3d
+    elif wp_dtype == wp.float32:
+        vec_dtype = wp.vec3f
+    else:
+        raise ValueError(
+            f"Unsupported wp_dtype: {wp_dtype}. Expected wp.float32 or wp.float64"
+        )
+
     # Get number of atoms from positions array
     num_atoms = positions.shape[0]
     max_neighbors = neighbor_matrix.shape[1] if num_atoms > 0 else 0
-    device = positions.device
 
     # Set fill_value if not provided
     if fill_value is None:
@@ -1832,15 +1844,9 @@ def dftd3_matrix(
     if num_atoms == 0:
         return
 
-    # Determine scalar dtype from vec_dtype
-    if vec_dtype == wp.vec3d:
-        wp_dtype = wp.float64
-    elif vec_dtype == wp.vec3f:
-        wp_dtype = wp.float32
-    else:
-        raise ValueError(
-            f"Unsupported vec_dtype: {vec_dtype}. Expected wp.vec3f or wp.vec3d"
-        )
+    # Create default batch_idx if not provided (all atoms in single system)
+    if batch_idx is None:
+        batch_idx = wp.zeros(num_atoms, dtype=wp.int32, device=device)
 
     # Precompute inv_w for S5 switching
     if s5_smoothing_off > s5_smoothing_on:
@@ -1947,7 +1953,8 @@ def dftd3_matrix_pbc(
     forces: wp.array,
     energy: wp.array,
     virial: wp.array,
-    vec_dtype: type,
+    wp_dtype: type,
+    device: str,
     k1: float = 16.0,
     k3: float = -4.0,
     s6: float = 1.0,
@@ -2013,8 +2020,10 @@ def dftd3_matrix_pbc(
     virial : wp.array(dtype=mat33f), shape [num_systems]
         OUTPUT: Virial tensor in energy units. Must be pre-allocated and zeroed.
         Only computed if compute_virial=True.
-    vec_dtype : type
-        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64) matching positions dtype.
+    device : str
+        Warp device string (e.g., 'cuda:0', 'cpu').
     k1 : float, optional
         CN counting function steepness parameter, in inverse distance units
         (typically 16.0 1/Bohr). Default: 16.0
@@ -2047,6 +2056,7 @@ def dftd3_matrix_pbc(
     - **Two-body only**: Three-body Axilrod-Teller-Muto terms not included
     - Unit consistency required: standard D3 parameters use atomic units
       (Bohr for distances, Hartree for energy)
+    - Virial tensor is computed when compute_virial=True
 
     See Also
     --------
@@ -2054,10 +2064,19 @@ def dftd3_matrix_pbc(
     dftd3 : Neighbor list (CSR) format, non-periodic
     dftd3_pbc : Neighbor list (CSR) format with PBC support
     """
+    # Derive vector dtype from scalar dtype
+    if wp_dtype == wp.float64:
+        vec_dtype = wp.vec3d
+    elif wp_dtype == wp.float32:
+        vec_dtype = wp.vec3f
+    else:
+        raise ValueError(
+            f"Unsupported wp_dtype: {wp_dtype}. Expected wp.float32 or wp.float64"
+        )
+
     # Get number of atoms from positions array
     num_atoms = positions.shape[0]
     max_neighbors = neighbor_matrix.shape[1] if num_atoms > 0 else 0
-    device = positions.device
 
     # Set fill_value if not provided
     if fill_value is None:
@@ -2067,15 +2086,9 @@ def dftd3_matrix_pbc(
     if num_atoms == 0:
         return
 
-    # Determine scalar dtype from vec_dtype
-    if vec_dtype == wp.vec3d:
-        wp_dtype = wp.float64
-    elif vec_dtype == wp.vec3f:
-        wp_dtype = wp.float32
-    else:
-        raise ValueError(
-            f"Unsupported vec_dtype: {vec_dtype}. Expected wp.vec3f or wp.vec3d"
-        )
+    # Create default batch_idx if not provided (all atoms in single system)
+    if batch_idx is None:
+        batch_idx = wp.zeros(num_atoms, dtype=wp.int32, device=device)
 
     # Precompute inv_w for S5 switching
     if s5_smoothing_off > s5_smoothing_on:
@@ -2194,7 +2207,8 @@ def dftd3(
     forces: wp.array,
     energy: wp.array,
     virial: wp.array,
-    vec_dtype: type,
+    wp_dtype: type,
+    device: str,
     k1: float = 16.0,
     k3: float = -4.0,
     s6: float = 1.0,
@@ -2254,8 +2268,10 @@ def dftd3(
     virial : wp.array(dtype=mat33f), shape [num_systems]
         OUTPUT: Virial tensor (not computed for non-periodic systems). Must be
         pre-allocated but will not be modified.
-    vec_dtype : type
-        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64) matching positions dtype.
+    device : str
+        Warp device string (e.g., 'cuda:0', 'cpu').
     k1 : float, optional
         CN counting function steepness parameter, in inverse distance units
         (typically 16.0 1/Bohr). Default: 16.0
@@ -2294,24 +2310,27 @@ def dftd3(
     dftd3_matrix : Neighbor matrix format, non-periodic
     dftd3_matrix_pbc : Neighbor matrix format with PBC support
     """
+    # Derive vector dtype from scalar dtype
+    if wp_dtype == wp.float64:
+        vec_dtype = wp.vec3d
+    elif wp_dtype == wp.float32:
+        vec_dtype = wp.vec3f
+    else:
+        raise ValueError(
+            f"Unsupported wp_dtype: {wp_dtype}. Expected wp.float32 or wp.float64"
+        )
+
     # Get number of atoms and edges
     num_atoms = positions.shape[0]
     num_edges = idx_j.shape[0]
-    device = positions.device
 
     # Handle empty case
     if num_atoms == 0 or num_edges == 0:
         return
 
-    # Determine scalar dtype from vec_dtype
-    if vec_dtype == wp.vec3d:
-        wp_dtype = wp.float64
-    elif vec_dtype == wp.vec3f:
-        wp_dtype = wp.float32
-    else:
-        raise ValueError(
-            f"Unsupported vec_dtype: {vec_dtype}. Expected wp.vec3f or wp.vec3d"
-        )
+    # Create default batch_idx if not provided (all atoms in single system)
+    if batch_idx is None:
+        batch_idx = wp.zeros(num_atoms, dtype=wp.int32, device=device)
 
     # Precompute inv_w for S5 switching
     if s5_smoothing_off > s5_smoothing_on:
@@ -2419,7 +2438,8 @@ def dftd3_pbc(
     forces: wp.array,
     energy: wp.array,
     virial: wp.array,
-    vec_dtype: type,
+    wp_dtype: type,
+    device: str,
     k1: float = 16.0,
     k3: float = -4.0,
     s6: float = 1.0,
@@ -2487,8 +2507,10 @@ def dftd3_pbc(
     virial : wp.array(dtype=mat33f), shape [num_systems]
         OUTPUT: Virial tensor in energy units. Must be pre-allocated and zeroed.
         Only computed if compute_virial=True.
-    vec_dtype : type
-        Vector dtype (wp.vec3f or wp.vec3d) matching positions dtype.
+    wp_dtype : type
+        Warp scalar dtype (wp.float32 or wp.float64) matching positions dtype.
+    device : str
+        Warp device string (e.g., 'cuda:0', 'cpu').
     k1 : float, optional
         CN counting function steepness parameter, in inverse distance units
         (typically 16.0 1/Bohr). Default: 16.0
@@ -2519,6 +2541,7 @@ def dftd3_pbc(
     - **Two-body only**: Three-body Axilrod-Teller-Muto terms not included
     - Unit consistency required: standard D3 parameters use atomic units
       (Bohr for distances, Hartree for energy)
+    - Virial tensor is computed when compute_virial=True
 
     See Also
     --------
@@ -2526,25 +2549,27 @@ def dftd3_pbc(
     dftd3_matrix : Neighbor matrix format, non-periodic
     dftd3_matrix_pbc : Neighbor matrix format with PBC support
     """
+    # Derive vector dtype from scalar dtype
+    if wp_dtype == wp.float64:
+        vec_dtype = wp.vec3d
+    elif wp_dtype == wp.float32:
+        vec_dtype = wp.vec3f
+    else:
+        raise ValueError(
+            f"Unsupported wp_dtype: {wp_dtype}. Expected wp.float32 or wp.float64"
+        )
+
     # Get number of atoms and edges
     num_atoms = positions.shape[0]
     num_edges = idx_j.shape[0]
-    device = positions.device
 
     # Handle empty case
     if num_atoms == 0 or num_edges == 0:
         return
 
-    # Determine scalar dtype from vec_dtype
-    # TODO: make this determined from positions
-    if vec_dtype == wp.vec3d:
-        wp_dtype = wp.float64
-    elif vec_dtype == wp.vec3f:
-        wp_dtype = wp.float32
-    else:
-        raise ValueError(
-            f"Unsupported vec_dtype: {vec_dtype}. Expected wp.vec3f or wp.vec3d"
-        )
+    # Create default batch_idx if not provided (all atoms in single system)
+    if batch_idx is None:
+        batch_idx = wp.zeros(num_atoms, dtype=wp.int32, device=device)
 
     # Precompute inv_w for S5 switching
     if s5_smoothing_off > s5_smoothing_on:

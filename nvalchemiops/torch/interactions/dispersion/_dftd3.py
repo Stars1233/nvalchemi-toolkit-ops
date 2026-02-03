@@ -21,11 +21,18 @@ import torch
 import warp as wp
 
 from nvalchemiops.interactions.dispersion._dftd3 import (
-    dftd3_nl as wp_dftd3_nl,
+    dftd3 as wp_dftd3,
 )
 from nvalchemiops.interactions.dispersion._dftd3 import (
-    dftd3_nm as wp_dftd3_nm,
+    dftd3_matrix as wp_dftd3_matrix,
 )
+from nvalchemiops.interactions.dispersion._dftd3 import (
+    dftd3_matrix_pbc as wp_dftd3_matrix_pbc,
+)
+from nvalchemiops.interactions.dispersion._dftd3 import (
+    dftd3_pbc as wp_dftd3_pbc,
+)
+from nvalchemiops.types import get_wp_dtype, get_wp_mat_dtype, get_wp_vec_dtype
 
 __all__ = [
     "D3Parameters",
@@ -228,10 +235,10 @@ class D3Parameters:
 
 
 @torch.library.custom_op(
-    "nvalchemiops::dftd3_nm",
+    "nvalchemiops::dftd3_matrix",
     mutates_args=("energy", "forces", "coord_num", "virial"),
 )
-def _dftd3_nm_op(
+def _dftd3_matrix_op(
     positions: torch.Tensor,
     numbers: torch.Tensor,
     neighbor_matrix: torch.Tensor,
@@ -253,18 +260,16 @@ def _dftd3_nm_op(
     s5_smoothing_off: float = 1e10,
     fill_value: int | None = None,
     batch_idx: torch.Tensor | None = None,
-    cell: torch.Tensor | None = None,
-    neighbor_matrix_shifts: torch.Tensor | None = None,
-    compute_virial: bool = False,
     device: str | None = None,
 ) -> None:
-    """Internal custom op for DFT-D3(BJ) dispersion energy and forces computation.
+    """Internal custom op for DFT-D3(BJ) dispersion energy and forces
+    computation (non-PBC, neighbor matrix format).
 
     This is a low-level custom operator that performs DFT-D3(BJ) dispersion
-    calculations using Warp kernels. Output tensors must be pre-allocated by
-    the caller and are modified in-place. For most use cases, prefer the
-    higher-level :func:`dftd3` wrapper function instead of calling
-    this method directly.
+    calculations using Warp kernels for non-periodic systems with neighbor matrix format.
+    Output tensors must be pre-allocated by the caller and are modified in-place.
+    For most use cases, prefer the higher-level :func:`dftd3` wrapper function
+    instead of calling this method directly.
 
     This function is torch.compile compatible.
 
@@ -278,6 +283,223 @@ def _dftd3_nm_op(
     neighbor_matrix : torch.Tensor, shape (num_atoms, max_neighbors), dtype=int32
         Neighbor indices. See module docstring for format details.
         Padding entries have values >= fill_value.
+    covalent_radii : torch.Tensor, shape (max_Z+1), dtype=float32
+        Covalent radii indexed by atomic number, in same units as positions
+    r4r2 : torch.Tensor, shape (max_Z+1), dtype=float32
+        <r⁴>/<r²> expectation values for C8 computation (dimensionless)
+    c6_reference : torch.Tensor, shape (max_Z+1, max_Z+1, 5, 5), dtype=float32
+        C6 reference values in energy x distance^6 units
+    coord_num_ref : torch.Tensor, shape (max_Z+1, max_Z+1, 5, 5), dtype=float32
+        CN reference grid (dimensionless)
+    a1 : float
+        Becke-Johnson damping parameter 1 (functional-dependent, dimensionless)
+    a2 : float
+        Becke-Johnson damping parameter 2 (functional-dependent), in same units as positions
+    s8 : float
+        C8 term scaling factor (functional-dependent, dimensionless)
+    energy : torch.Tensor, shape (num_systems,), dtype=float32
+        OUTPUT: Total dispersion energy. Must be pre-allocated. Units are energy
+        (Hartree when using standard D3 parameters).
+    forces : torch.Tensor, shape (num_atoms, 3), dtype=float32
+        OUTPUT: Atomic forces. Must be pre-allocated. Units are energy/distance
+        (Hartree/Bohr when using standard D3 parameters).
+    coord_num : torch.Tensor, shape (num_atoms,), dtype=float32
+        OUTPUT: Coordination numbers (dimensionless). Must be pre-allocated.
+    virial : torch.Tensor, shape (num_systems, 3, 3), dtype=float32
+        OUTPUT: Virial tensor (remains zeros for non-PBC). Must be pre-allocated.
+    k1 : float, optional
+        CN counting function steepness parameter, in inverse distance units
+        (typically 16.0 1/Bohr for atomic units)
+    k3 : float, optional
+        CN interpolation Gaussian width parameter (typically -4.0, dimensionless)
+    s6 : float, optional
+        C6 term scaling factor (typically 1.0, dimensionless)
+    s5_smoothing_on : float, optional
+        Distance where S5 switching begins, in same units as positions. Default: 1e10
+    s5_smoothing_off : float, optional
+        Distance where S5 switching completes, in same units as positions. Default: 1e10
+    fill_value : int | None, optional
+        Value indicating padding in neighbor_matrix. If None, defaults to num_atoms.
+    batch_idx : torch.Tensor, shape (num_atoms,), dtype=int32, optional
+        Batch indices. If None, all atoms are in a single system (batch 0).
+    device : str, optional
+        Warp device string (e.g., 'cuda:0', 'cpu'). If None, inferred from positions.
+
+    Returns
+    -------
+    None
+
+    Modifies input tensors in-place: energy, forces, coord_num, virial (remains zeros)
+
+    Notes
+    -----
+    - All input tensors should use consistent units. Standard D3 parameters use
+      atomic units (Bohr for distances, Hartree for energy).
+    - Float32 or float64 precision for positions; outputs always float32
+    - Padding atoms indicated by numbers[i] == 0
+    - **Two-body only**: Computes pairwise C6 and C8 dispersion terms; three-body
+      Axilrod-Teller-Muto (ATM/C9) terms are not included
+    - For PBC calculations, use :func:`_dftd3_matrix_pbc_op` instead
+
+    See Also
+    --------
+    :func:`dftd3` : Higher-level wrapper that handles allocation
+    :func:`_dftd3_matrix_pbc_op` : PBC variant with neighbor matrix format
+    """
+    # Ensure all parameters are on correct device/dtype
+    covalent_radii = covalent_radii.to(device=positions.device, dtype=torch.float32)
+    r4r2 = r4r2.to(device=positions.device, dtype=torch.float32)
+    c6_reference = c6_reference.to(device=positions.device, dtype=torch.float32)
+    coord_num_ref = coord_num_ref.to(device=positions.device, dtype=torch.float32)
+
+    # Get shapes
+    num_atoms = positions.size(0)
+
+    # Set fill_value if not provided
+    if fill_value is None:
+        fill_value = num_atoms
+
+    # Handle empty case
+    if num_atoms == 0:
+        return
+
+    # Infer device from positions if not provided
+    if device is None:
+        device = str(positions.device)
+
+    # Zero output tensors
+    energy.zero_()
+    forces.zero_()
+    coord_num.zero_()
+    virial.zero_()
+
+    # Detect dtype and set appropriate Warp types
+    wp_dtype = get_wp_dtype(positions.dtype)
+    vec_dtype = get_wp_vec_dtype(positions.dtype)
+
+    # Create batch indices if not provided (single system)
+    if batch_idx is None:
+        batch_idx = torch.zeros(num_atoms, dtype=torch.int32, device=positions.device)
+
+    # Convert PyTorch tensors to Warp arrays (detach positions)
+    positions_wp = wp.from_torch(positions.detach(), dtype=vec_dtype, return_ctype=True)
+    numbers_wp = wp.from_torch(numbers, dtype=wp.int32, return_ctype=True)
+    neighbor_matrix_wp = wp.from_torch(
+        neighbor_matrix, dtype=wp.int32, return_ctype=True
+    )
+    batch_idx_wp = wp.from_torch(batch_idx, dtype=wp.int32, return_ctype=True)
+
+    # Convert parameter tensors to Warp arrays (ensure float32)
+    covalent_radii_wp = wp.from_torch(
+        covalent_radii.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+    r4r2_wp = wp.from_torch(
+        r4r2.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+    c6_reference_wp = wp.from_torch(
+        c6_reference.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+    coord_num_ref_wp = wp.from_torch(
+        coord_num_ref.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+
+    # Convert pre-allocated output arrays to Warp
+    coord_num_wp = wp.from_torch(coord_num, dtype=wp.float32, return_ctype=True)
+    forces_wp = wp.from_torch(forces, dtype=wp.vec3f, return_ctype=True)
+    energy_wp = wp.from_torch(energy, dtype=wp.float32, return_ctype=True)
+    virial_wp = wp.from_torch(virial, dtype=wp.mat33f, return_ctype=True)
+
+    # Call non-PBC warp launcher
+    wp_dftd3_matrix(
+        positions=positions_wp,
+        numbers=numbers_wp,
+        neighbor_matrix=neighbor_matrix_wp,
+        covalent_radii=covalent_radii_wp,
+        r4r2=r4r2_wp,
+        c6_reference=c6_reference_wp,
+        coord_num_ref=coord_num_ref_wp,
+        a1=a1,
+        a2=a2,
+        s8=s8,
+        coord_num=coord_num_wp,
+        forces=forces_wp,
+        energy=energy_wp,
+        virial=virial_wp,
+        wp_dtype=wp_dtype,
+        device=device,
+        k1=k1,
+        k3=k3,
+        s6=s6,
+        s5_smoothing_on=s5_smoothing_on,
+        s5_smoothing_off=s5_smoothing_off,
+        fill_value=fill_value,
+        batch_idx=batch_idx_wp,
+    )
+
+
+@torch.library.custom_op(
+    "nvalchemiops::dftd3_matrix_pbc",
+    mutates_args=("energy", "forces", "coord_num", "virial"),
+)
+def _dftd3_matrix_pbc_op(
+    positions: torch.Tensor,
+    numbers: torch.Tensor,
+    neighbor_matrix: torch.Tensor,
+    cell: torch.Tensor,
+    neighbor_matrix_shifts: torch.Tensor,
+    covalent_radii: torch.Tensor,
+    r4r2: torch.Tensor,
+    c6_reference: torch.Tensor,
+    coord_num_ref: torch.Tensor,
+    a1: float,
+    a2: float,
+    s8: float,
+    energy: torch.Tensor,
+    forces: torch.Tensor,
+    coord_num: torch.Tensor,
+    virial: torch.Tensor,
+    k1: float = 16.0,
+    k3: float = -4.0,
+    s6: float = 1.0,
+    s5_smoothing_on: float = 1e10,
+    s5_smoothing_off: float = 1e10,
+    fill_value: int | None = None,
+    batch_idx: torch.Tensor | None = None,
+    compute_virial: bool = False,
+    device: str | None = None,
+) -> None:
+    """Internal custom op for DFT-D3(BJ) dispersion energy and forces computation (PBC, neighbor matrix format).
+
+    This is a low-level custom operator that performs DFT-D3(BJ) dispersion
+    calculations using Warp kernels for periodic systems with neighbor matrix format.
+    Output tensors must be pre-allocated by the caller and are modified in-place.
+    For most use cases, prefer the higher-level :func:`dftd3` wrapper function
+    instead of calling this method directly.
+
+    This function is torch.compile compatible.
+
+    Parameters
+    ----------
+    positions : torch.Tensor, shape (num_atoms, 3)
+        Atomic coordinates as float32 or float64, in consistent distance units
+        (conventionally Bohr)
+    numbers : torch.Tensor, shape (num_atoms), dtype=int32
+        Atomic numbers
+    neighbor_matrix : torch.Tensor, shape (num_atoms, max_neighbors), dtype=int32
+        Neighbor indices. See module docstring for format details.
+        Padding entries have values >= fill_value.
+    cell : torch.Tensor, shape (num_systems, 3, 3), dtype=float32 or float64
+        Unit cell lattice vectors for PBC, in same dtype and units as positions.
+    neighbor_matrix_shifts : torch.Tensor, shape (num_atoms, max_neighbors, 3), dtype=int32
+        Integer unit cell shifts for PBC.
     covalent_radii : torch.Tensor, shape (max_Z+1), dtype=float32
         Covalent radii indexed by atomic number, in same units as positions
     r4r2 : torch.Tensor, shape (max_Z+1), dtype=float32
@@ -318,10 +540,8 @@ def _dftd3_nm_op(
         Value indicating padding in neighbor_matrix. If None, defaults to num_atoms.
     batch_idx : torch.Tensor, shape (num_atoms,), dtype=int32, optional
         Batch indices. If None, all atoms are in a single system (batch 0).
-    cell : torch.Tensor, shape (num_systems, 3, 3), dtype=float32 or float64, optional
-        Unit cell lattice vectors for PBC, in same dtype and units as positions.
-    neighbor_matrix_shifts : torch.Tensor, shape (num_atoms, max_neighbors, 3), dtype=int32, optional
-        Integer unit cell shifts for PBC.
+    compute_virial : bool, optional
+        If True, compute virial tensor. Default: False
     device : str, optional
         Warp device string (e.g., 'cuda:0', 'cpu'). If None, inferred from positions.
 
@@ -340,16 +560,19 @@ def _dftd3_nm_op(
     - **Two-body only**: Computes pairwise C6 and C8 dispersion terms; three-body
       Axilrod-Teller-Muto (ATM/C9) terms are not included
     - Bulk stress tensor can be obtained by dividing virial by system volume.
+    - For non-PBC calculations, use :func:`_dftd3_matrix_op` instead
 
     See Also
     --------
     :func:`dftd3` : Higher-level wrapper that handles allocation
+    :func:`_dftd3_matrix_op` : Non-PBC variant with neighbor matrix format
     """
     # Ensure all parameters are on correct device/dtype
     covalent_radii = covalent_radii.to(device=positions.device, dtype=torch.float32)
     r4r2 = r4r2.to(device=positions.device, dtype=torch.float32)
     c6_reference = c6_reference.to(device=positions.device, dtype=torch.float32)
     coord_num_ref = coord_num_ref.to(device=positions.device, dtype=torch.float32)
+
     # Get shapes
     num_atoms = positions.size(0)
 
@@ -371,13 +594,10 @@ def _dftd3_nm_op(
     coord_num.zero_()
     virial.zero_()
 
-    # Detect dtype and set appropriate Warp vector types
-    if positions.dtype == torch.float64:
-        vec_dtype = wp.vec3d
-        mat_dtype = wp.mat33d
-    else:
-        vec_dtype = wp.vec3f
-        mat_dtype = wp.mat33f
+    # Detect dtype and set appropriate Warp types
+    wp_dtype = get_wp_dtype(positions.dtype)
+    vec_dtype = get_wp_vec_dtype(positions.dtype)
+    mat_dtype = get_wp_mat_dtype(positions.dtype)
 
     # Create batch indices if not provided (single system)
     if batch_idx is None:
@@ -413,23 +633,17 @@ def _dftd3_nm_op(
         return_ctype=True,
     )
 
-    # Convert neighbor_matrix_shifts to warp if provided for PBC
-    if cell is not None and neighbor_matrix_shifts is not None:
-        # Detach and convert cell
-        cell_wp = wp.from_torch(
-            cell.detach().to(dtype=positions.dtype, device=positions.device),
-            dtype=mat_dtype,
-            return_ctype=True,
-        )
-        # Convert unit shifts to vec3i format
-        neighbor_matrix_shifts_wp = wp.from_torch(
-            neighbor_matrix_shifts.to(dtype=torch.int32, device=positions.device),
-            dtype=wp.vec3i,
-            return_ctype=True,
-        )
-    else:
-        cell_wp = None
-        neighbor_matrix_shifts_wp = None
+    # Convert cell and neighbor_matrix_shifts to warp for PBC
+    cell_wp = wp.from_torch(
+        cell.detach().to(dtype=positions.dtype, device=positions.device),
+        dtype=mat_dtype,
+        return_ctype=True,
+    )
+    neighbor_matrix_shifts_wp = wp.from_torch(
+        neighbor_matrix_shifts.to(dtype=torch.int32, device=positions.device),
+        dtype=wp.vec3i,
+        return_ctype=True,
+    )
 
     # Convert pre-allocated output arrays to Warp
     coord_num_wp = wp.from_torch(coord_num, dtype=wp.float32, return_ctype=True)
@@ -437,11 +651,13 @@ def _dftd3_nm_op(
     energy_wp = wp.from_torch(energy, dtype=wp.float32, return_ctype=True)
     virial_wp = wp.from_torch(virial, dtype=wp.mat33f, return_ctype=True)
 
-    # Call framework-agnostic warp launcher
-    wp_dftd3_nm(
+    # Call PBC warp launcher
+    wp_dftd3_matrix_pbc(
         positions=positions_wp,
         numbers=numbers_wp,
         neighbor_matrix=neighbor_matrix_wp,
+        cell=cell_wp,
+        neighbor_matrix_shifts=neighbor_matrix_shifts_wp,
         covalent_radii=covalent_radii_wp,
         r4r2=r4r2_wp,
         c6_reference=c6_reference_wp,
@@ -453,6 +669,8 @@ def _dftd3_nm_op(
         forces=forces_wp,
         energy=energy_wp,
         virial=virial_wp,
+        wp_dtype=wp_dtype,
+        device=device,
         k1=k1,
         k3=k3,
         s6=s6,
@@ -460,19 +678,15 @@ def _dftd3_nm_op(
         s5_smoothing_off=s5_smoothing_off,
         fill_value=fill_value,
         batch_idx=batch_idx_wp,
-        cell=cell_wp,
-        neighbor_matrix_shifts=neighbor_matrix_shifts_wp,
         compute_virial=compute_virial,
-        vec_dtype=vec_dtype,
-        device=device,
     )
 
 
 @torch.library.custom_op(
-    "nvalchemiops::dftd3_nl",
+    "nvalchemiops::dftd3",
     mutates_args=("energy", "forces", "coord_num", "virial"),
 )
-def _dftd3_nl_op(
+def _dftd3_op(
     positions: torch.Tensor,
     numbers: torch.Tensor,
     idx_j: torch.Tensor,
@@ -494,18 +708,15 @@ def _dftd3_nl_op(
     s5_smoothing_on: float = 1e10,
     s5_smoothing_off: float = 1e10,
     batch_idx: torch.Tensor | None = None,
-    cell: torch.Tensor | None = None,
-    unit_shifts: torch.Tensor | None = None,
-    compute_virial: bool = False,
     device: str | None = None,
 ) -> None:
-    """Internal custom op for DFT-D3(BJ) using CSR neighbor list format.
+    """Internal custom op for DFT-D3(BJ) using CSR neighbor list format (non-PBC).
 
     This is a low-level custom operator that performs DFT-D3(BJ) dispersion
     calculations using CSR (Compressed Sparse Row) neighbor list format with
-    idx_j (destination indices) and neighbor_ptr (row pointers). Output tensors
-    must be pre-allocated by the caller and are modified in-place. For most use
-    cases, prefer the higher-level :func:`dftd3` wrapper
+    idx_j (destination indices) and neighbor_ptr (row pointers) for non-periodic
+    systems. Output tensors must be pre-allocated by the caller and are modified
+    in-place. For most use cases, prefer the higher-level :func:`dftd3` wrapper
     function instead of calling this method directly.
 
     This function is torch.compile compatible.
@@ -541,8 +752,7 @@ def _dftd3_nl_op(
     coord_num : torch.Tensor, shape (num_atoms,), dtype=float32
         OUTPUT: Coordination numbers
     virial : torch.Tensor, shape (num_systems, 3, 3), dtype=float32
-        OUTPUT: Virial tensor. Must be pre-allocated. Units are energy
-        (Hartree when using standard D3 parameters).
+        OUTPUT: Virial tensor (remains zeros for non-PBC). Must be pre-allocated.
     k1 : float, optional
         CN counting function steepness parameter
     k3 : float, optional
@@ -555,10 +765,6 @@ def _dftd3_nl_op(
         Distance where S5 switching completes
     batch_idx : torch.Tensor, shape (num_atoms,), dtype=int32, optional
         Batch indices
-    cell : torch.Tensor, shape (num_systems, 3, 3), dtype=float32 or float64, optional
-        Unit cell lattice vectors for PBC, in same dtype and units as positions.
-    unit_shifts : torch.Tensor, shape (num_edges, 3), dtype=int32, optional
-        Integer unit cell shifts for PBC
     device : str, optional
         Warp device string
 
@@ -566,21 +772,22 @@ def _dftd3_nl_op(
     -------
     None
 
-    Modifies input tensors in-place: energy, forces, coord_num, virial (if compute_virial=True)
+    Modifies input tensors in-place: energy, forces, coord_num, virial (remains zeros)
 
     Notes
     -----
     - All input tensors should use consistent units. Standard D3 parameters use
       atomic units (Bohr for distances, Hartree for energy).
-    - Float32 or float64 precision for positions and cell; outputs always float32
+    - Float32 or float64 precision for positions; outputs always float32
     - Padding atoms indicated by numbers[i] == 0
     - **Two-body only**: Computes pairwise C6 and C8 dispersion terms; three-body
       Axilrod-Teller-Muto (ATM/C9) terms are not included
-    - Bulk stress tensor can be obtained by dividing virial by system volume.
+    - For PBC calculations, use :func:`_dftd3_pbc_op` instead
 
     See Also
     --------
     :func:`dftd3` : Higher-level wrapper that handles allocation
+    :func:`_dftd3_pbc_op` : PBC variant with CSR neighbor list format
 
     """
     # Ensure all parameters are on correct device/dtype
@@ -607,11 +814,9 @@ def _dftd3_nl_op(
     coord_num.zero_()
     virial.zero_()
 
-    # Detect dtype and set appropriate Warp vector types
-    if positions.dtype == torch.float64:
-        vec_dtype = wp.vec3d
-    else:
-        vec_dtype = wp.vec3f
+    # Detect dtype and set appropriate Warp types
+    wp_dtype = get_wp_dtype(positions.dtype)
+    vec_dtype = get_wp_vec_dtype(positions.dtype)
 
     # Create batch indices if not provided (single system)
     if batch_idx is None:
@@ -646,32 +851,14 @@ def _dftd3_nl_op(
         return_ctype=True,
     )
 
-    # Convert unit_shifts and cell to warp if provided for PBC
-    if unit_shifts is not None and cell is not None:
-        # Convert cell to Warp
-        cell_wp = wp.from_torch(
-            cell.detach().to(dtype=positions.dtype, device=positions.device),
-            dtype=wp.mat33d if positions.dtype == torch.float64 else wp.mat33f,
-            return_ctype=True,
-        )
-        # Convert unit shifts to vec3i format
-        unit_shifts_wp = wp.from_torch(
-            unit_shifts.to(dtype=torch.int32, device=positions.device),
-            dtype=wp.vec3i,
-            return_ctype=True,
-        )
-    else:
-        cell_wp = None
-        unit_shifts_wp = None
-
     # Convert pre-allocated output arrays to Warp
     coord_num_wp = wp.from_torch(coord_num, dtype=wp.float32, return_ctype=True)
     forces_wp = wp.from_torch(forces, dtype=wp.vec3f, return_ctype=True)
     energy_wp = wp.from_torch(energy, dtype=wp.float32, return_ctype=True)
     virial_wp = wp.from_torch(virial, dtype=wp.mat33f, return_ctype=True)
 
-    # Call framework-agnostic warp launcher
-    wp_dftd3_nl(
+    # Call non-PBC warp launcher
+    wp_dftd3(
         positions=positions_wp,
         numbers=numbers_wp,
         idx_j=idx_j_wp,
@@ -687,17 +874,244 @@ def _dftd3_nl_op(
         forces=forces_wp,
         energy=energy_wp,
         virial=virial_wp,
+        wp_dtype=wp_dtype,
+        device=device,
         k1=k1,
         k3=k3,
         s6=s6,
         s5_smoothing_on=s5_smoothing_on,
         s5_smoothing_off=s5_smoothing_off,
         batch_idx=batch_idx_wp,
+    )
+
+
+@torch.library.custom_op(
+    "nvalchemiops::dftd3_pbc",
+    mutates_args=("energy", "forces", "coord_num", "virial"),
+)
+def _dftd3_pbc_op(
+    positions: torch.Tensor,
+    numbers: torch.Tensor,
+    idx_j: torch.Tensor,
+    neighbor_ptr: torch.Tensor,
+    cell: torch.Tensor,
+    unit_shifts: torch.Tensor,
+    covalent_radii: torch.Tensor,
+    r4r2: torch.Tensor,
+    c6_reference: torch.Tensor,
+    coord_num_ref: torch.Tensor,
+    a1: float,
+    a2: float,
+    s8: float,
+    energy: torch.Tensor,
+    forces: torch.Tensor,
+    coord_num: torch.Tensor,
+    virial: torch.Tensor,
+    k1: float = 16.0,
+    k3: float = -4.0,
+    s6: float = 1.0,
+    s5_smoothing_on: float = 1e10,
+    s5_smoothing_off: float = 1e10,
+    batch_idx: torch.Tensor | None = None,
+    compute_virial: bool = False,
+    device: str | None = None,
+) -> None:
+    """Internal custom op for DFT-D3(BJ) using CSR neighbor list format (PBC).
+
+    This is a low-level custom operator that performs DFT-D3(BJ) dispersion
+    calculations using CSR (Compressed Sparse Row) neighbor list format with
+    idx_j (destination indices) and neighbor_ptr (row pointers) for periodic
+    systems. Output tensors must be pre-allocated by the caller and are modified
+    in-place. For most use cases, prefer the higher-level :func:`dftd3` wrapper
+    function instead of calling this method directly.
+
+    This function is torch.compile compatible.
+
+    Parameters
+    ----------
+    positions : torch.Tensor, shape (num_atoms, 3)
+        Atomic coordinates as float32 or float64
+    numbers : torch.Tensor, shape (num_atoms), dtype=int32
+        Atomic numbers
+    idx_j : torch.Tensor, shape (num_edges,), dtype=int32
+        Destination atom indices (flattened neighbor list in CSR format)
+    neighbor_ptr : torch.Tensor, shape (num_atoms+1,), dtype=int32
+        CSR row pointers where neighbor_ptr[i]:neighbor_ptr[i+1] gives neighbors of atom i
+    cell : torch.Tensor, shape (num_systems, 3, 3), dtype=float32 or float64
+        Unit cell lattice vectors for PBC, in same dtype and units as positions.
+    unit_shifts : torch.Tensor, shape (num_edges, 3), dtype=int32
+        Integer unit cell shifts for PBC
+    covalent_radii : torch.Tensor, shape (max_Z+1), dtype=float32
+        Covalent radii indexed by atomic number
+    r4r2 : torch.Tensor, shape (max_Z+1), dtype=float32
+        <r⁴>/<r²> expectation values
+    c6_reference : torch.Tensor, shape (max_Z+1, max_Z+1, 5, 5), dtype=float32
+        C6 reference values
+    coord_num_ref : torch.Tensor, shape (max_Z+1, max_Z+1, 5, 5), dtype=float32
+        CN reference grid
+    a1 : float
+        Becke-Johnson damping parameter 1
+    a2 : float
+        Becke-Johnson damping parameter 2
+    s8 : float
+        C8 term scaling factor
+    energy : torch.Tensor, shape (num_systems,), dtype=float32
+        OUTPUT: Total dispersion energy
+    forces : torch.Tensor, shape (num_atoms, 3), dtype=float32
+        OUTPUT: Atomic forces
+    coord_num : torch.Tensor, shape (num_atoms,), dtype=float32
+        OUTPUT: Coordination numbers
+    virial : torch.Tensor, shape (num_systems, 3, 3), dtype=float32
+        OUTPUT: Virial tensor. Must be pre-allocated. Units are energy
+        (Hartree when using standard D3 parameters).
+    k1 : float, optional
+        CN counting function steepness parameter
+    k3 : float, optional
+        CN interpolation Gaussian width parameter
+    s6 : float, optional
+        C6 term scaling factor
+    s5_smoothing_on : float, optional
+        Distance where S5 switching begins
+    s5_smoothing_off : float, optional
+        Distance where S5 switching completes
+    batch_idx : torch.Tensor, shape (num_atoms,), dtype=int32, optional
+        Batch indices
+    compute_virial : bool, optional
+        If True, compute virial tensor. Default: False
+    device : str, optional
+        Warp device string
+
+    Returns
+    -------
+    None
+
+    Modifies input tensors in-place: energy, forces, coord_num, virial (if compute_virial=True)
+
+    Notes
+    -----
+    - All input tensors should use consistent units. Standard D3 parameters use
+      atomic units (Bohr for distances, Hartree for energy).
+    - Float32 or float64 precision for positions and cell; outputs always float32
+    - Padding atoms indicated by numbers[i] == 0
+    - **Two-body only**: Computes pairwise C6 and C8 dispersion terms; three-body
+      Axilrod-Teller-Muto (ATM/C9) terms are not included
+    - Bulk stress tensor can be obtained by dividing virial by system volume.
+    - For non-PBC calculations, use :func:`_dftd3_op` instead
+
+    See Also
+    --------
+    :func:`dftd3` : Higher-level wrapper that handles allocation
+    :func:`_dftd3_op` : Non-PBC variant with CSR neighbor list format
+
+    """
+    # Ensure all parameters are on correct device/dtype
+    covalent_radii = covalent_radii.to(device=positions.device, dtype=torch.float32)
+    r4r2 = r4r2.to(device=positions.device, dtype=torch.float32)
+    c6_reference = c6_reference.to(device=positions.device, dtype=torch.float32)
+    coord_num_ref = coord_num_ref.to(device=positions.device, dtype=torch.float32)
+
+    # Get shapes
+    num_atoms = positions.size(0)
+    num_edges = idx_j.size(0)
+
+    # Handle empty case
+    if num_atoms == 0 or num_edges == 0:
+        return
+
+    # Infer device from positions if not provided
+    if device is None:
+        device = str(positions.device)
+
+    # Zero output tensors
+    energy.zero_()
+    forces.zero_()
+    coord_num.zero_()
+    virial.zero_()
+
+    # Detect dtype and set appropriate Warp types
+    wp_dtype = get_wp_dtype(positions.dtype)
+    vec_dtype = get_wp_vec_dtype(positions.dtype)
+    mat_dtype = get_wp_mat_dtype(positions.dtype)
+
+    # Create batch indices if not provided (single system)
+    if batch_idx is None:
+        batch_idx = torch.zeros(num_atoms, dtype=torch.int32, device=positions.device)
+
+    # Convert PyTorch tensors to Warp arrays
+    positions_wp = wp.from_torch(positions.detach(), dtype=vec_dtype, return_ctype=True)
+    numbers_wp = wp.from_torch(numbers, dtype=wp.int32, return_ctype=True)
+    idx_j_wp = wp.from_torch(idx_j, dtype=wp.int32, return_ctype=True)
+    neighbor_ptr_wp = wp.from_torch(neighbor_ptr, dtype=wp.int32, return_ctype=True)
+    batch_idx_wp = wp.from_torch(batch_idx, dtype=wp.int32, return_ctype=True)
+
+    # Convert parameter tensors to Warp arrays
+    covalent_radii_wp = wp.from_torch(
+        covalent_radii.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+    r4r2_wp = wp.from_torch(
+        r4r2.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+    c6_reference_wp = wp.from_torch(
+        c6_reference.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+    coord_num_ref_wp = wp.from_torch(
+        coord_num_ref.to(dtype=torch.float32, device=positions.device),
+        dtype=wp.float32,
+        return_ctype=True,
+    )
+
+    # Convert cell and unit_shifts to warp for PBC
+    cell_wp = wp.from_torch(
+        cell.detach().to(dtype=positions.dtype, device=positions.device),
+        dtype=mat_dtype,
+        return_ctype=True,
+    )
+    unit_shifts_wp = wp.from_torch(
+        unit_shifts.to(dtype=torch.int32, device=positions.device),
+        dtype=wp.vec3i,
+        return_ctype=True,
+    )
+
+    # Convert pre-allocated output arrays to Warp
+    coord_num_wp = wp.from_torch(coord_num, dtype=wp.float32, return_ctype=True)
+    forces_wp = wp.from_torch(forces, dtype=wp.vec3f, return_ctype=True)
+    energy_wp = wp.from_torch(energy, dtype=wp.float32, return_ctype=True)
+    virial_wp = wp.from_torch(virial, dtype=wp.mat33f, return_ctype=True)
+
+    # Call PBC warp launcher
+    wp_dftd3_pbc(
+        positions=positions_wp,
+        numbers=numbers_wp,
+        idx_j=idx_j_wp,
+        neighbor_ptr=neighbor_ptr_wp,
         cell=cell_wp,
         unit_shifts=unit_shifts_wp,
-        compute_virial=compute_virial,
-        vec_dtype=vec_dtype,
+        covalent_radii=covalent_radii_wp,
+        r4r2=r4r2_wp,
+        c6_reference=c6_reference_wp,
+        coord_num_ref=coord_num_ref_wp,
+        a1=a1,
+        a2=a2,
+        s8=s8,
+        coord_num=coord_num_wp,
+        forces=forces_wp,
+        energy=energy_wp,
+        virial=virial_wp,
+        wp_dtype=wp_dtype,
         device=device,
+        k1=k1,
+        k3=k3,
+        s6=s6,
+        s5_smoothing_on=s5_smoothing_on,
+        s5_smoothing_off=s5_smoothing_off,
+        batch_idx=batch_idx_wp,
+        compute_virial=compute_virial,
     )
 
 
@@ -890,16 +1304,10 @@ def dftd3(
     See Also
     --------
     :class:`D3Parameters` : Dataclass for organizing DFT-D3 reference parameters
-    :func:`_dftd3_nm_op` : Internal custom operator for neighbor matrix format
-    :func:`_dftd3_nl_op` : Internal custom operator for neighbor list format
-    :func:`_compute_cartesian_shifts_matrix` : Pass 0 - Converts unit cell shifts to Cartesian (neighbor matrix)
-    :func:`_compute_cartesian_shifts` : Pass 0 - Converts unit cell shifts to Cartesian (neighbor list)
-    :func:`_cn_kernel_matrix` : Pass 1 - Computes coordination numbers (neighbor matrix)
-    :func:`_cn_kernel` : Pass 1 - Computes coordination numbers (neighbor list)
-    :func:`_direct_forces_and_dE_dCN_kernel_matrix` : Pass 2 - neighbor matrix format
-    :func:`_direct_forces_and_dE_dCN_kernel` : Pass 2 - neighbor list format
-    :func:`_cn_forces_contrib_kernel_matrix` : Pass 3 - neighbor matrix format
-    :func:`_cn_forces_contrib_kernel` : Pass 3 - neighbor list format
+    :func:`_dftd3_matrix_op` : Internal custom operator for neighbor matrix format (non-PBC)
+    :func:`_dftd3_matrix_pbc_op` : Internal custom operator for neighbor matrix format (PBC)
+    :func:`_dftd3_op` : Internal custom operator for neighbor list format (non-PBC)
+    :func:`_dftd3_pbc_op` : Internal custom operator for neighbor list format (PBC)
     """
     # Validate neighbor format inputs
     matrix_provided = neighbor_matrix is not None
@@ -1039,36 +1447,64 @@ def dftd3(
     else:
         virial = torch.zeros((0, 3, 3), dtype=torch.float32, device=positions.device)
 
-    # Dispatch to appropriate implementation based on neighbor format
+    # Dispatch to appropriate implementation based on neighbor format and PBC
     if neighbor_matrix is not None:
-        # Matrix format - call custom op
-        _dftd3_nm_op(
-            positions=positions,
-            numbers=numbers,
-            neighbor_matrix=neighbor_matrix,
-            covalent_radii=covalent_radii,
-            r4r2=r4r2,
-            c6_reference=c6_reference,
-            coord_num_ref=coord_num_ref,
-            a1=a1,
-            a2=a2,
-            s8=s8,
-            energy=energy,
-            forces=forces,
-            coord_num=coord_num,
-            k1=k1,
-            k3=k3,
-            s6=s6,
-            s5_smoothing_on=s5_smoothing_on,
-            s5_smoothing_off=s5_smoothing_off,
-            fill_value=fill_value,
-            batch_idx=batch_idx,
-            cell=cell,
-            neighbor_matrix_shifts=neighbor_matrix_shifts,
-            virial=virial,
-            compute_virial=compute_virial,
-            device=device,
-        )
+        # Matrix format - dispatch based on PBC
+        if cell is not None and neighbor_matrix_shifts is not None:
+            # PBC variant
+            _dftd3_matrix_pbc_op(
+                positions=positions,
+                numbers=numbers,
+                neighbor_matrix=neighbor_matrix,
+                cell=cell,
+                neighbor_matrix_shifts=neighbor_matrix_shifts,
+                covalent_radii=covalent_radii,
+                r4r2=r4r2,
+                c6_reference=c6_reference,
+                coord_num_ref=coord_num_ref,
+                a1=a1,
+                a2=a2,
+                s8=s8,
+                energy=energy,
+                forces=forces,
+                coord_num=coord_num,
+                virial=virial,
+                k1=k1,
+                k3=k3,
+                s6=s6,
+                s5_smoothing_on=s5_smoothing_on,
+                s5_smoothing_off=s5_smoothing_off,
+                fill_value=fill_value,
+                batch_idx=batch_idx,
+                compute_virial=compute_virial,
+                device=device,
+            )
+        else:
+            # Non-PBC variant
+            _dftd3_matrix_op(
+                positions=positions,
+                numbers=numbers,
+                neighbor_matrix=neighbor_matrix,
+                covalent_radii=covalent_radii,
+                r4r2=r4r2,
+                c6_reference=c6_reference,
+                coord_num_ref=coord_num_ref,
+                a1=a1,
+                a2=a2,
+                s8=s8,
+                energy=energy,
+                forces=forces,
+                coord_num=coord_num,
+                virial=virial,
+                k1=k1,
+                k3=k3,
+                s6=s6,
+                s5_smoothing_on=s5_smoothing_on,
+                s5_smoothing_off=s5_smoothing_off,
+                fill_value=fill_value,
+                batch_idx=batch_idx,
+                device=device,
+            )
     else:
         # List format - use CSR format from neighbor list API
         # neighbor_list: [2, num_pairs] in COO format where row 1 is idx_j (destination atoms)
@@ -1077,33 +1513,62 @@ def dftd3(
         # Extract idx_j from neighbor_list (row 1 contains destination atoms)
         idx_j_csr = neighbor_list[1]
 
-        _dftd3_nl_op(
-            positions=positions,
-            numbers=numbers,
-            idx_j=idx_j_csr,
-            neighbor_ptr=neighbor_ptr,
-            covalent_radii=covalent_radii,
-            r4r2=r4r2,
-            c6_reference=c6_reference,
-            coord_num_ref=coord_num_ref,
-            a1=a1,
-            a2=a2,
-            s8=s8,
-            energy=energy,
-            forces=forces,
-            coord_num=coord_num,
-            k1=k1,
-            k3=k3,
-            s6=s6,
-            s5_smoothing_on=s5_smoothing_on,
-            s5_smoothing_off=s5_smoothing_off,
-            batch_idx=batch_idx,
-            cell=cell,
-            unit_shifts=unit_shifts,
-            virial=virial,
-            compute_virial=compute_virial,
-            device=device,
-        )
+        # Dispatch based on PBC
+        if cell is not None and unit_shifts is not None:
+            # PBC variant
+            _dftd3_pbc_op(
+                positions=positions,
+                numbers=numbers,
+                idx_j=idx_j_csr,
+                neighbor_ptr=neighbor_ptr,
+                cell=cell,
+                unit_shifts=unit_shifts,
+                covalent_radii=covalent_radii,
+                r4r2=r4r2,
+                c6_reference=c6_reference,
+                coord_num_ref=coord_num_ref,
+                a1=a1,
+                a2=a2,
+                s8=s8,
+                energy=energy,
+                forces=forces,
+                coord_num=coord_num,
+                virial=virial,
+                k1=k1,
+                k3=k3,
+                s6=s6,
+                s5_smoothing_on=s5_smoothing_on,
+                s5_smoothing_off=s5_smoothing_off,
+                batch_idx=batch_idx,
+                compute_virial=compute_virial,
+                device=device,
+            )
+        else:
+            # Non-PBC variant
+            _dftd3_op(
+                positions=positions,
+                numbers=numbers,
+                idx_j=idx_j_csr,
+                neighbor_ptr=neighbor_ptr,
+                covalent_radii=covalent_radii,
+                r4r2=r4r2,
+                c6_reference=c6_reference,
+                coord_num_ref=coord_num_ref,
+                a1=a1,
+                a2=a2,
+                s8=s8,
+                energy=energy,
+                forces=forces,
+                coord_num=coord_num,
+                virial=virial,
+                k1=k1,
+                k3=k3,
+                s6=s6,
+                s5_smoothing_on=s5_smoothing_on,
+                s5_smoothing_off=s5_smoothing_off,
+                batch_idx=batch_idx,
+                device=device,
+            )
 
     if compute_virial:
         return energy, forces, coord_num, virial

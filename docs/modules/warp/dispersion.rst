@@ -18,10 +18,19 @@ DFT-D3(BJ) Dispersion Corrections
 The DFT-D3 implementation supports two neighbor representation formats:
 
 - **Neighbor matrix** (dense): ``[num_atoms, max_neighbors]`` with padding
-- **Neighbor list** (sparse COO): ``[2, num_pairs]`` without padding
+- **Neighbor list** (sparse CSR): Compressed sparse row format with ``idx_j`` and ``neighbor_ptr``
 
 Both formats produce identical results and support all features including periodic
 boundary conditions, batching, and smooth cutoff functions.
 
-.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3_nm
-.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3_nl
+Non-Periodic Systems
+~~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3_matrix
+.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3
+
+Periodic Boundary Conditions (PBC)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3_matrix_pbc
+.. autofunction:: nvalchemiops.interactions.dispersion._dftd3.dftd3_pbc

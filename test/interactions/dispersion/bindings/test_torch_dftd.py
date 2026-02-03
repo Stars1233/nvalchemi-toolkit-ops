@@ -16,7 +16,7 @@
 PyTorch binding tests for DFT-D3 custom ops.
 
 This test suite focuses on the PyTorch binding layer, including:
-- Custom op interface (_dftd3_nm_op, _dftd3_nl_op)
+- Custom op interface (_dftd3_matrix_op, _dftd3_op)
 - Device handling (CPU/GPU)
 - Dtype support (float32/float64)
 - Torch.compile compatibility
@@ -44,8 +44,8 @@ except ImportError:
 if TORCH_AVAILABLE:
     from nvalchemiops.torch.interactions.dispersion import D3Parameters, dftd3
     from nvalchemiops.torch.interactions.dispersion._dftd3 import (
-        _dftd3_nl_op,
-        _dftd3_nm_op,
+        _dftd3_matrix_op,
+        _dftd3_op,
     )
     from nvalchemiops.torch.neighbors import (
         neighbor_list as build_neighbor_list,
@@ -74,7 +74,7 @@ def numpy_to_torch(arr: np.ndarray, device: str = "cpu") -> torch.Tensor:
 
 
 class TestCustomOpNeighborMatrix:
-    """Test the _dftd3_nm_op custom operator directly."""
+    """Test the _dftd3_matrix_op custom operator directly."""
 
     @pytest.mark.usefixtures("element_tables", "device")
     def test_custom_op_basic(self, request):
@@ -113,7 +113,7 @@ class TestCustomOpNeighborMatrix:
         virial = torch.zeros((0, 3, 3), dtype=torch.float32, device=device)
 
         # Call custom op directly
-        _dftd3_nm_op(
+        _dftd3_matrix_op(
             positions=positions,
             numbers=numbers,
             neighbor_matrix=neighbor_matrix,
@@ -175,7 +175,7 @@ class TestCustomOpNeighborMatrix:
         virial = torch.zeros((0, 3, 3), dtype=torch.float32, device=device)
 
         # Call custom op
-        _dftd3_nm_op(
+        _dftd3_matrix_op(
             positions=positions,
             numbers=numbers,
             neighbor_matrix=neighbor_matrix,
@@ -232,7 +232,7 @@ class TestCustomOpNeighborMatrix:
         virial = torch.zeros((0, 3, 3), dtype=torch.float32, device=device)
 
         # Should handle empty case without error
-        _dftd3_nm_op(
+        _dftd3_matrix_op(
             positions=positions,
             numbers=numbers,
             neighbor_matrix=neighbor_matrix,
@@ -260,7 +260,7 @@ class TestCustomOpNeighborMatrix:
 
 
 class TestCustomOpNeighborList:
-    """Test the _dftd3_nl_op custom operator directly."""
+    """Test the _dftd3_op custom operator directly."""
 
     @pytest.mark.usefixtures("element_tables", "device")
     def test_custom_op_basic(self, request):
@@ -300,7 +300,7 @@ class TestCustomOpNeighborList:
         virial = torch.zeros((0, 3, 3), dtype=torch.float32, device=device)
 
         # Call custom op directly
-        _dftd3_nl_op(
+        _dftd3_op(
             positions=positions,
             numbers=numbers,
             idx_j=idx_j,
@@ -359,7 +359,7 @@ class TestCustomOpNeighborList:
         virial = torch.zeros((0, 3, 3), dtype=torch.float32, device=device)
 
         # Should handle empty case without error
-        _dftd3_nl_op(
+        _dftd3_op(
             positions=positions,
             numbers=numbers,
             idx_j=idx_j,

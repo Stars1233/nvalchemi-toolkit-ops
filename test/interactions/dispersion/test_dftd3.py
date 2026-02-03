@@ -85,7 +85,7 @@ def run_dftd3_matrix(
     functional_params: dict,
     device: str,
     batch_indices: np.ndarray | None = None,
-    vec_dtype=wp.vec3f,
+    wp_dtype=wp.float32,
 ) -> dict:
     """
     Run dftd3_matrix warp launcher for a system.
@@ -102,14 +102,20 @@ def run_dftd3_matrix(
         Warp device string
     batch_indices : np.ndarray or None
         Batch indices for atoms
-    vec_dtype : warp dtype
-        Vector dtype (wp.vec3f or wp.vec3d)
+    wp_dtype : warp dtype
+        Scalar dtype (wp.float32 or wp.float64)
 
     Returns
     -------
     dict
         Results with 'energy', 'forces', 'coord_num' (numpy arrays)
     """
+    # Derive vector dtype from scalar dtype
+    if wp_dtype == wp.float64:
+        vec_dtype = wp.vec3d
+    else:
+        vec_dtype = wp.vec3f
+
     # Extract system data (now numpy arrays)
     B = system["B"]
     coord_flat = system["coord"]
@@ -138,12 +144,12 @@ def run_dftd3_matrix(
         device,
     )
 
-    # Determine number of systems
+    # Determine number of systems and batch_idx
     if batch_indices is not None:
         batch_idx_wp = to_warp(batch_indices, wp.int32, device)
         num_systems = int(batch_indices.max()) + 1
     else:
-        batch_idx_wp = wp.zeros(B, dtype=wp.int32, device=device)
+        batch_idx_wp = None  # Let launcher create default
         num_systems = 1
 
     # Allocate outputs (pre-zeroed)
@@ -168,7 +174,8 @@ def run_dftd3_matrix(
         forces=forces_wp,
         energy=energy_wp,
         virial=virial_wp,
-        vec_dtype=vec_dtype,
+        wp_dtype=wp_dtype,
+        device=device,
         k1=functional_params["k1"],
         k3=functional_params["k3"],
         s6=functional_params["s6"],
@@ -189,7 +196,7 @@ def run_dftd3(
     functional_params: dict,
     device: str,
     batch_indices: np.ndarray | None = None,
-    vec_dtype=wp.vec3f,
+    wp_dtype=wp.float32,
 ) -> dict:
     """
     Run dftd3 warp launcher for a system (neighbor list / CSR format).
@@ -206,14 +213,20 @@ def run_dftd3(
         Warp device string
     batch_indices : np.ndarray or None
         Batch indices for atoms
-    vec_dtype : warp dtype
-        Vector dtype (wp.vec3f or wp.vec3d)
+    wp_dtype : warp dtype
+        Scalar dtype (wp.float32 or wp.float64)
 
     Returns
     -------
     dict
         Results with 'energy', 'forces', 'coord_num' (numpy arrays)
     """
+    # Derive vector dtype from scalar dtype
+    if wp_dtype == wp.float64:
+        vec_dtype = wp.vec3d
+    else:
+        vec_dtype = wp.vec3f
+
     # Extract system data (now numpy arrays)
     B = system["B"]
     coord_flat = system["coord"]
@@ -247,12 +260,12 @@ def run_dftd3(
         device,
     )
 
-    # Determine number of systems
+    # Determine number of systems and batch_idx
     if batch_indices is not None:
         batch_idx_wp = to_warp(batch_indices, wp.int32, device)
         num_systems = int(batch_indices.max()) + 1
     else:
-        batch_idx_wp = wp.zeros(B, dtype=wp.int32, device=device)
+        batch_idx_wp = None  # Let launcher create default
         num_systems = 1
 
     # Allocate outputs (pre-zeroed)
@@ -278,7 +291,8 @@ def run_dftd3(
         forces=forces_wp,
         energy=energy_wp,
         virial=virial_wp,
-        vec_dtype=vec_dtype,
+        wp_dtype=wp_dtype,
+        device=device,
         k1=functional_params["k1"],
         k3=functional_params["k3"],
         s6=functional_params["s6"],
@@ -426,9 +440,9 @@ class TestWarpLauncherMatrix:
             results["forces"][0], -results["forces"][1], rtol=1e-5, atol=1e-7
         )
 
-    @pytest.mark.parametrize("vec_dtype", [wp.vec3f, wp.vec3d])
+    @pytest.mark.parametrize("wp_dtype", [wp.float32, wp.float64])
     @pytest.mark.usefixtures("h2_system", "element_tables", "device")
-    def test_dtype_support(self, request, vec_dtype):
+    def test_dtype_support(self, request, wp_dtype):
         """Test that both float32 and float64 precision are supported."""
         h2_system = request.getfixturevalue("h2_system")
         element_tables = request.getfixturevalue("element_tables")
@@ -448,7 +462,7 @@ class TestWarpLauncherMatrix:
             element_tables,
             functional_params,
             device,
-            vec_dtype=vec_dtype,
+            wp_dtype=wp_dtype,
         )
 
         # Should produce finite results for both precisions
@@ -504,7 +518,8 @@ class TestWarpLauncherMatrix:
             forces=forces_wp,
             energy=energy_wp,
             virial=virial_wp,
-            vec_dtype=wp.vec3f,
+            wp_dtype=wp.float32,
+            device=device,
             batch_idx=batch_idx_wp,
         )
 
@@ -927,9 +942,9 @@ class TestWarpLauncherList:
             results["forces"][0], -results["forces"][1], rtol=1e-5, atol=1e-7
         )
 
-    @pytest.mark.parametrize("vec_dtype", [wp.vec3f, wp.vec3d])
+    @pytest.mark.parametrize("wp_dtype", [wp.float32, wp.float64])
     @pytest.mark.usefixtures("h2_system", "element_tables", "device")
-    def test_dtype_support(self, request, vec_dtype):
+    def test_dtype_support(self, request, wp_dtype):
         """Test that both float32 and float64 precision are supported."""
         h2_system = request.getfixturevalue("h2_system")
         element_tables = request.getfixturevalue("element_tables")
@@ -949,7 +964,7 @@ class TestWarpLauncherList:
             element_tables,
             functional_params,
             device,
-            vec_dtype=vec_dtype,
+            wp_dtype=wp_dtype,
         )
 
         # Should produce finite results for both precisions
@@ -1007,7 +1022,8 @@ class TestWarpLauncherList:
             forces=forces_wp,
             energy=energy_wp,
             virial=virial_wp,
-            vec_dtype=wp.vec3f,
+            wp_dtype=wp.float32,
+            device=device,
             batch_idx=batch_idx_wp,
         )
 
