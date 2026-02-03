@@ -892,13 +892,14 @@ def dftd3(
     :class:`D3Parameters` : Dataclass for organizing DFT-D3 reference parameters
     :func:`_dftd3_nm_op` : Internal custom operator for neighbor matrix format
     :func:`_dftd3_nl_op` : Internal custom operator for neighbor list format
-    :func:`_compute_cartesian_shifts` : Pass 0 - Converts unit cell shifts to Cartesian
-    :func:`_cn_kernel_nm` : Pass 1 - Computes coordination numbers (neighbor matrix)
-    :func:`_cn_kernel_nl` : Pass 1 - Computes coordination numbers (neighbor list)
-    :func:`_direct_forces_and_dE_dCN_kernel_nm` : Pass 2 - neighbor matrix format
-    :func:`_direct_forces_and_dE_dCN_kernel_nl` : Pass 2 - neighbor list format
-    :func:`_cn_forces_contrib_kernel_nm` : Pass 3 - neighbor matrix format
-    :func:`_cn_forces_contrib_kernel_nl` : Pass 3 - neighbor list format
+    :func:`_compute_cartesian_shifts_matrix` : Pass 0 - Converts unit cell shifts to Cartesian (neighbor matrix)
+    :func:`_compute_cartesian_shifts` : Pass 0 - Converts unit cell shifts to Cartesian (neighbor list)
+    :func:`_cn_kernel_matrix` : Pass 1 - Computes coordination numbers (neighbor matrix)
+    :func:`_cn_kernel` : Pass 1 - Computes coordination numbers (neighbor list)
+    :func:`_direct_forces_and_dE_dCN_kernel_matrix` : Pass 2 - neighbor matrix format
+    :func:`_direct_forces_and_dE_dCN_kernel` : Pass 2 - neighbor list format
+    :func:`_cn_forces_contrib_kernel_matrix` : Pass 3 - neighbor matrix format
+    :func:`_cn_forces_contrib_kernel` : Pass 3 - neighbor list format
     """
     # Validate neighbor format inputs
     matrix_provided = neighbor_matrix is not None

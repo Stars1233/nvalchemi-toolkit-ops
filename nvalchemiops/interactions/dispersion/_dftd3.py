@@ -178,15 +178,14 @@ __all__ = [
     # Warp launchers (framework-agnostic public API)
     "dftd3_nm",
     "dftd3_nl",
-    # Kernel overload dictionaries (for framework bindings)
+    "_compute_cartesian_shifts_matrix_overload",
     "_compute_cartesian_shifts_overload",
-    "_cn_kernel_nm_overload",
-    "_direct_forces_and_dE_dCN_kernel_nm_overload",
-    "_cn_forces_contrib_kernel_nm_overload",
-    "_compute_cartesian_shifts_nl_overload",
-    "_cn_kernel_nl_overload",
-    "_direct_forces_and_dE_dCN_kernel_nl_overload",
-    "_cn_forces_contrib_kernel_nl_overload",
+    "_cn_kernel_matrix_overload",
+    "_cn_kernel_overload",
+    "_direct_forces_and_dE_dCN_kernel_matrix_overload",
+    "_direct_forces_and_dE_dCN_kernel_overload",
+    "_cn_forces_contrib_kernel_matrix_overload",
+    "_cn_forces_contrib_kernel_overload",
 ]
 
 # ==============================================================================
@@ -257,9 +256,9 @@ def _s5_switch(
 
     See Also
     --------
-    :func:`_direct_forces_and_dE_dCN_kernel_nm` : Uses this switching function
+    :func:`_direct_forces_and_dE_dCN_kernel_matrix` : Uses this switching function
     for cutoff smoothing (neighbor matrix)
-    :func:`_direct_forces_and_dE_dCN_kernel_nl` : Uses this switching function
+    :func:`_direct_forces_and_dE_dCN_kernel` : Uses this switching function
     for cutoff smoothing (neighbor list)
     """
     if r_off <= r_on:
@@ -342,9 +341,9 @@ def _c6ab_interpolate(
 
     See Also
     --------
-    :func:`_direct_forces_and_dE_dCN_kernel_nm` : Calls this function for C6
+    :func:`_direct_forces_and_dE_dCN_kernel_matrix` : Calls this function for C6
     coefficient interpolation (neighbor matrix)
-    :func:`_direct_forces_and_dE_dCN_kernel_nl` : Calls this function for C6
+    :func:`_direct_forces_and_dE_dCN_kernel` : Calls this function for C6
     coefficient interpolation (neighbor list)
     """
     # log-sum-exp trick to avoid numerical instability
@@ -607,7 +606,7 @@ def _unit_shift_to_cartesian(
 
 
 @wp.kernel(enable_backward=False)
-def _compute_cartesian_shifts(
+def _compute_cartesian_shifts_matrix(
     cell: wp.array(dtype=Any),
     unit_shifts: wp.array2d(dtype=wp.vec3i),
     neighbor_matrix: wp.array2d(dtype=wp.int32),
@@ -657,14 +656,14 @@ def _compute_cartesian_shifts(
 
     See Also
     --------
-    :func:`_cn_kernel_nm` : Pass 1 - Uses computed Cartesian shifts for PBC (neighbor matrix)
-    :func:`_cn_kernel_nl` : Pass 1 - Uses computed Cartesian shifts for PBC (neighbor list)
-    :func:`_direct_forces_and_dE_dCN_kernel_nm` : Pass 2 - Uses computed
+    :func:`_cn_kernel_matrix` : Pass 1 - Uses computed Cartesian shifts for PBC (neighbor matrix)
+    :func:`_cn_kernel` : Pass 1 - Uses computed Cartesian shifts for PBC (neighbor list)
+    :func:`_direct_forces_and_dE_dCN_kernel_matrix` : Pass 2 - Uses computed
     Cartesian shifts for PBC (neighbor matrix)
-    :func:`_direct_forces_and_dE_dCN_kernel_nl` : Pass 2 - Uses computed
+    :func:`_direct_forces_and_dE_dCN_kernel` : Pass 2 - Uses computed
     Cartesian shifts for PBC (neighbor list)
-    :func:`_cn_forces_contrib_kernel_nm` : Pass 3 - Uses computed Cartesian shifts for PBC (neighbor matrix)
-    :func:`_cn_forces_contrib_kernel_nl` : Pass 3 - Uses computed Cartesian shifts for PBC (neighbor list)
+    :func:`_cn_forces_contrib_kernel_matrix` : Pass 3 - Uses computed Cartesian shifts for PBC (neighbor matrix)
+    :func:`_cn_forces_contrib_kernel` : Pass 3 - Uses computed Cartesian shifts for PBC (neighbor list)
     :func:`dftd3` : High-level wrapper that orchestrates all passes
     """
     atom_i, neighbor_idx = wp.tid()
@@ -687,7 +686,7 @@ def _compute_cartesian_shifts(
 
 
 @wp.kernel(enable_backward=False)
-def _cn_kernel_nm(
+def _cn_kernel_matrix(
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     neighbor_matrix: wp.array2d(dtype=wp.int32),
@@ -749,8 +748,8 @@ def _cn_kernel_nm(
 
     See Also
     --------
-    :func:`_compute_cartesian_shifts` : Pass 0 - Computes Cartesian shifts for PBC
-    :func:`_direct_forces_and_dE_dCN_kernel_nm` : Pass 2 - Uses coordination numbers
+    :func:`_compute_cartesian_shifts_matrix` : Pass 0 - Computes Cartesian shifts for PBC
+    :func:`_direct_forces_and_dE_dCN_kernel_matrix` : Pass 2 - Uses coordination numbers
     computed here
     :func:`dftd3` : High-level wrapper that orchestrates all passes
     """
@@ -798,7 +797,7 @@ def _cn_kernel_nm(
 
 
 @wp.kernel(enable_backward=False)
-def _direct_forces_and_dE_dCN_kernel_nm(  # NOSONAR (S1542) "math formula"
+def _direct_forces_and_dE_dCN_kernel_matrix(  # NOSONAR (S1542) "math formula"
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     neighbor_matrix: wp.array2d(dtype=wp.int32),
@@ -882,9 +881,9 @@ def _direct_forces_and_dE_dCN_kernel_nm(  # NOSONAR (S1542) "math formula"
 
     See Also
     --------
-    :func:`_compute_cartesian_shifts` : Pass 0 - Computes Cartesian shifts for PBC
-    :func:`_cn_kernel_nm` : Pass 1 - Computes coordination numbers used here
-    :func:`_cn_forces_contrib_kernel_nm` : Pass 3 - Uses dE/dCN values accumulated here
+    :func:`_compute_cartesian_shifts_matrix` : Pass 0 - Computes Cartesian shifts for PBC
+    :func:`_cn_kernel_matrix` : Pass 1 - Computes coordination numbers used here
+    :func:`_cn_forces_contrib_kernel_matrix` : Pass 3 - Uses dE/dCN values accumulated here
     :func:`_c6ab_interpolate` : Called to interpolate C6 coefficients
     :func:`_s5_switch` : Called for cutoff smoothing
     :func:`dftd3` : High-level wrapper that orchestrates all passes
@@ -988,7 +987,7 @@ def _direct_forces_and_dE_dCN_kernel_nm(  # NOSONAR (S1542) "math formula"
 
 
 @wp.kernel(enable_backward=False)
-def _cn_forces_contrib_kernel_nm(
+def _cn_forces_contrib_kernel_matrix(
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     neighbor_matrix: wp.array2d(dtype=wp.int32),
@@ -1044,8 +1043,8 @@ def _cn_forces_contrib_kernel_nm(
 
     See Also
     --------
-    :func:`_compute_cartesian_shifts` : Pass 0 - Computes Cartesian shifts for PBC
-    :func:`_direct_forces_and_dE_dCN_kernel_nm` : Pass 2 - Computes dE/dCN values used here
+    :func:`_compute_cartesian_shifts_matrix` : Pass 0 - Computes Cartesian shifts for PBC
+    :func:`_direct_forces_and_dE_dCN_kernel_matrix` : Pass 2 - Computes dE/dCN values used here
     :func:`dftd3` : High-level wrapper that orchestrates all passes
     """
     atom_i = wp.tid()
@@ -1116,7 +1115,7 @@ def _cn_forces_contrib_kernel_nm(
 
 
 @wp.kernel(enable_backward=False)
-def _compute_cartesian_shifts_nl(
+def _compute_cartesian_shifts(
     cell: wp.array(dtype=Any),
     unit_shifts: wp.array(dtype=wp.vec3i),
     neighbor_ptr: wp.array(dtype=wp.int32),
@@ -1151,9 +1150,9 @@ def _compute_cartesian_shifts_nl(
 
     See Also
     --------
-    :func:`_cn_kernel_nl` : Uses computed Cartesian shifts for PBC
-    :func:`_direct_forces_and_dE_dCN_kernel_nl` : Uses computed Cartesian shifts for PBC
-    :func:`_cn_forces_contrib_kernel_nl` : Uses computed Cartesian shifts for PBC
+    :func:`_cn_kernel` : Uses computed Cartesian shifts for PBC
+    :func:`_direct_forces_and_dE_dCN_kernel` : Uses computed Cartesian shifts for PBC
+    :func:`_cn_forces_contrib_kernel` : Uses computed Cartesian shifts for PBC
     """
     atom_i = wp.tid()
 
@@ -1175,7 +1174,7 @@ def _compute_cartesian_shifts_nl(
 
 
 @wp.kernel(enable_backward=False)
-def _cn_kernel_nl(
+def _cn_kernel(
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     idx_j: wp.array(dtype=wp.int32),
@@ -1257,7 +1256,7 @@ def _cn_kernel_nl(
 
 
 @wp.kernel(enable_backward=False)
-def _direct_forces_and_dE_dCN_kernel_nl(  # NOSONAR (S1542) "math formula"
+def _direct_forces_and_dE_dCN_kernel(  # NOSONAR (S1542) "math formula"
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     idx_j: wp.array(dtype=wp.int32),
@@ -1389,7 +1388,7 @@ def _direct_forces_and_dE_dCN_kernel_nl(  # NOSONAR (S1542) "math formula"
 
 
 @wp.kernel(enable_backward=False)
-def _cn_forces_contrib_kernel_nl(
+def _cn_forces_contrib_kernel(
     positions: wp.array(dtype=Any),
     numbers: wp.array(dtype=wp.int32),
     idx_j: wp.array(dtype=wp.int32),
@@ -1482,21 +1481,23 @@ V = [wp.vec3f, wp.vec3d]
 M = [wp.mat33f, wp.mat33d]
 
 # Overload dictionaries keyed by scalar type
-_compute_cartesian_shifts_overload = {}
-_cn_kernel_nm_overload = {}
-_direct_forces_and_dE_dCN_kernel_nm_overload = {}
-_cn_forces_contrib_kernel_nm_overload = {}
+# Neighbor matrix format (dense)
+_compute_cartesian_shifts_matrix_overload = {}
+_cn_kernel_matrix_overload = {}
+_direct_forces_and_dE_dCN_kernel_matrix_overload = {}
+_cn_forces_contrib_kernel_matrix_overload = {}
 
-# Neighbor list kernel overload dictionaries (CSR format)
-_compute_cartesian_shifts_nl_overload = {}
-_cn_kernel_nl_overload = {}
-_direct_forces_and_dE_dCN_kernel_nl_overload = {}
-_cn_forces_contrib_kernel_nl_overload = {}
+# Neighbor list kernel overload dictionaries (CSR format) - default naming convention
+_compute_cartesian_shifts_overload = {}
+_cn_kernel_overload = {}
+_direct_forces_and_dE_dCN_kernel_overload = {}
+_cn_forces_contrib_kernel_overload = {}
 
 # Register overloads for all kernel variants
 for t, v, m in zip(T, V, M):
-    _compute_cartesian_shifts_overload[t] = wp.overload(
-        _compute_cartesian_shifts,
+    # Neighbor matrix format (dense)
+    _compute_cartesian_shifts_matrix_overload[t] = wp.overload(
+        _compute_cartesian_shifts_matrix,
         [
             wp.array(dtype=m),
             wp.array2d(dtype=wp.vec3i),
@@ -1506,8 +1507,8 @@ for t, v, m in zip(T, V, M):
             wp.array2d(dtype=v),
         ],
     )
-    _cn_kernel_nm_overload[t] = wp.overload(
-        _cn_kernel_nm,
+    _cn_kernel_matrix_overload[t] = wp.overload(
+        _cn_kernel_matrix,
         [
             wp.array(dtype=v),
             wp.array(dtype=wp.int32),
@@ -1520,8 +1521,8 @@ for t, v, m in zip(T, V, M):
             wp.array(dtype=wp.float32),
         ],
     )
-    _direct_forces_and_dE_dCN_kernel_nm_overload[t] = wp.overload(
-        _direct_forces_and_dE_dCN_kernel_nm,
+    _direct_forces_and_dE_dCN_kernel_matrix_overload[t] = wp.overload(
+        _direct_forces_and_dE_dCN_kernel_matrix,
         [
             wp.array(dtype=v),
             wp.array(dtype=wp.int32),
@@ -1549,8 +1550,8 @@ for t, v, m in zip(T, V, M):
             wp.array(dtype=wp.mat33f),
         ],
     )
-    _cn_forces_contrib_kernel_nm_overload[t] = wp.overload(
-        _cn_forces_contrib_kernel_nm,
+    _cn_forces_contrib_kernel_matrix_overload[t] = wp.overload(
+        _cn_forces_contrib_kernel_matrix,
         [
             wp.array(dtype=v),
             wp.array(dtype=wp.int32),
@@ -1567,9 +1568,9 @@ for t, v, m in zip(T, V, M):
             wp.array(dtype=wp.mat33f),
         ],
     )
-    # Neighbor list kernel overloads (CSR format)
-    _compute_cartesian_shifts_nl_overload[t] = wp.overload(
-        _compute_cartesian_shifts_nl,
+    # Neighbor list kernel overloads (CSR format) - default naming convention
+    _compute_cartesian_shifts_overload[t] = wp.overload(
+        _compute_cartesian_shifts,
         [
             wp.array(dtype=m),
             wp.array(dtype=wp.vec3i),
@@ -1578,8 +1579,8 @@ for t, v, m in zip(T, V, M):
             wp.array(dtype=v),
         ],
     )
-    _cn_kernel_nl_overload[t] = wp.overload(
-        _cn_kernel_nl,
+    _cn_kernel_overload[t] = wp.overload(
+        _cn_kernel,
         [
             wp.array(dtype=v),
             wp.array(dtype=wp.int32),
@@ -1592,8 +1593,8 @@ for t, v, m in zip(T, V, M):
             wp.array(dtype=wp.float32),
         ],
     )
-    _direct_forces_and_dE_dCN_kernel_nl_overload[t] = wp.overload(
-        _direct_forces_and_dE_dCN_kernel_nl,
+    _direct_forces_and_dE_dCN_kernel_overload[t] = wp.overload(
+        _direct_forces_and_dE_dCN_kernel,
         [
             wp.array(dtype=v),
             wp.array(dtype=wp.int32),
@@ -1621,8 +1622,8 @@ for t, v, m in zip(T, V, M):
             wp.array(dtype=wp.mat33f),
         ],
     )
-    _cn_forces_contrib_kernel_nl_overload[t] = wp.overload(
-        _cn_forces_contrib_kernel_nl,
+    _cn_forces_contrib_kernel_overload[t] = wp.overload(
+        _cn_forces_contrib_kernel,
         [
             wp.array(dtype=v),
             wp.array(dtype=wp.int32),
@@ -1762,10 +1763,10 @@ def dftd3_nm(
     See Also
     --------
     dftd3_nl : Neighbor list (CSR) format variant
-    _compute_cartesian_shifts : Pass 0 kernel
-    _cn_kernel_nm : Pass 1 kernel
-    _direct_forces_and_dE_dCN_kernel_nm : Pass 2 kernel
-    _cn_forces_contrib_kernel_nm : Pass 3 kernel
+    _compute_cartesian_shifts_matrix : Pass 0 kernel
+    _cn_kernel_matrix : Pass 1 kernel
+    _direct_forces_and_dE_dCN_kernel_matrix : Pass 2 kernel
+    _cn_forces_contrib_kernel_matrix : Pass 3 kernel
     """
     # Get number of atoms from positions array
     num_atoms = positions.shape[0]
@@ -1810,7 +1811,7 @@ def dftd3_nm(
         )
 
         wp.launch(
-            kernel=_compute_cartesian_shifts_overload[wp_dtype],
+            kernel=_compute_cartesian_shifts_matrix_overload[wp_dtype],
             dim=(num_atoms, max_neighbors),
             inputs=[
                 cell,
@@ -1836,7 +1837,7 @@ def dftd3_nm(
 
     # Pass 1: Compute coordination numbers
     wp.launch(
-        kernel=_cn_kernel_nm_overload[wp_dtype],
+        kernel=_cn_kernel_matrix_overload[wp_dtype],
         dim=num_atoms,
         inputs=[
             positions,
@@ -1854,7 +1855,7 @@ def dftd3_nm(
 
     # Pass 2: Compute direct forces, energy, and accumulate dE/dCN
     wp.launch(
-        kernel=_direct_forces_and_dE_dCN_kernel_nm_overload[wp_dtype],
+        kernel=_direct_forces_and_dE_dCN_kernel_matrix_overload[wp_dtype],
         dim=num_atoms,
         inputs=[
             positions,
@@ -1884,7 +1885,7 @@ def dftd3_nm(
 
     # Pass 3: Add CN-dependent force contribution
     wp.launch(
-        kernel=_cn_forces_contrib_kernel_nm_overload[wp_dtype],
+        kernel=_cn_forces_contrib_kernel_matrix_overload[wp_dtype],
         dim=num_atoms,
         inputs=[
             positions,
@@ -2023,10 +2024,10 @@ def dftd3_nl(
     See Also
     --------
     dftd3_nm : Neighbor matrix format variant
-    _compute_cartesian_shifts_nl : Pass 0 kernel
-    _cn_kernel_nl : Pass 1 kernel
-    _direct_forces_and_dE_dCN_kernel_nl : Pass 2 kernel
-    _cn_forces_contrib_kernel_nl : Pass 3 kernel
+    _compute_cartesian_shifts : Pass 0 kernel
+    _cn_kernel : Pass 1 kernel
+    _direct_forces_and_dE_dCN_kernel : Pass 2 kernel
+    _cn_forces_contrib_kernel : Pass 3 kernel
     """
     # Get number of atoms and edges
     num_atoms = positions.shape[0]
@@ -2067,7 +2068,7 @@ def dftd3_nl(
         )
 
         wp.launch(
-            kernel=_compute_cartesian_shifts_nl_overload[wp_dtype],
+            kernel=_compute_cartesian_shifts_overload[wp_dtype],
             dim=num_atoms,
             inputs=[
                 cell,
@@ -2092,7 +2093,7 @@ def dftd3_nl(
 
     # Pass 1: Compute coordination numbers
     wp.launch(
-        kernel=_cn_kernel_nl_overload[wp_dtype],
+        kernel=_cn_kernel_overload[wp_dtype],
         dim=num_atoms,
         inputs=[
             positions,
@@ -2110,7 +2111,7 @@ def dftd3_nl(
 
     # Pass 2: Compute direct forces, energy, and accumulate dE/dCN
     wp.launch(
-        kernel=_direct_forces_and_dE_dCN_kernel_nl_overload[wp_dtype],
+        kernel=_direct_forces_and_dE_dCN_kernel_overload[wp_dtype],
         dim=num_atoms,
         inputs=[
             positions,
@@ -2140,7 +2141,7 @@ def dftd3_nl(
 
     # Pass 3: Add CN-dependent force contribution
     wp.launch(
-        kernel=_cn_forces_contrib_kernel_nl_overload[wp_dtype],
+        kernel=_cn_forces_contrib_kernel_overload[wp_dtype],
         dim=num_atoms,
         inputs=[
             positions,
