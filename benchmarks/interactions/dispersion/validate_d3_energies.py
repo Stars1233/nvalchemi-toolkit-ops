@@ -234,20 +234,18 @@ def run_warp_dftd3(
     rcov = params["rcov"]  # [95] in Angstrom
     r4r2 = params["r4r2"]  # [95]
 
-    # Flatten C6 reference arrays
+    # Split C6 reference arrays
     # c6ab[:,:,:,:,0] = C6 values
     # c6ab[:,:,:,:,1] = CN_i reference
     # c6ab[:,:,:,:,2] = CN_j reference
-    c6_reference = c6ab[:, :, :, :, 0].flatten().to(dtype=torch_dtype, device=device)
-    coord_num_ref_i = c6ab[:, :, :, :, 1].flatten().to(dtype=torch_dtype, device=device)
-    coord_num_ref_j = c6ab[:, :, :, :, 2].flatten().to(dtype=torch_dtype, device=device)
+    # The new API expects c6_reference [95, 95, 5, 5] and coord_num_ref [95, 95, 5, 5]
+    c6_reference = c6ab[:, :, :, :, 0].to(dtype=torch_dtype, device=device)
+    # For symmetric CN reference, average CN_i and CN_j
+    coord_num_ref = (c6ab[:, :, :, :, 1] + c6ab[:, :, :, :, 2]) / 2.0
+    coord_num_ref = coord_num_ref.to(dtype=torch_dtype, device=device)
 
     # Convert rcov from Angstrom to Bohr
     rcov_bohr = (rcov * ANGSTROM_TO_BOHR).to(dtype=torch_dtype, device=device)
-
-    # Maximum coordination numbers (element-specific defaults)
-    # DFT-D3 uses smooth CN without clamping - set to large values to match torch-dftd
-    max_coord_num = torch.full((95,), 99.0, dtype=torch_dtype, device=device)
 
     # Convert r4r2 to correct dtype and device
     r4r2_tensor = r4r2.to(dtype=torch_dtype, device=device)
@@ -255,38 +253,41 @@ def run_warp_dftd3(
     # Convert neighbor_matrix to correct dtype
     neighbor_matrix_tensor = neighbor_matrix.to(dtype=torch.int32, device=device)
 
-    # Call the PyTorch wrapper
-    energy, energy_per_atom, forces, coord_num = dftd3(
+    # Call the PyTorch wrapper with new API
+    num_atoms = len(structure)
+    result = dftd3(
         positions=positions_bohr,
         numbers=numbers_tensor,
         neighbor_matrix=neighbor_matrix_tensor,
         covalent_radii=rcov_bohr,
-        max_coord_num=max_coord_num,
         r4r2=r4r2_tensor,
         c6_reference=c6_reference,
-        coord_num_ref_i=coord_num_ref_i,
-        coord_num_ref_j=coord_num_ref_j,
-        max_atomic_num_plus_one=95,
+        coord_num_ref=coord_num_ref,
+        fill_value=num_atoms,
         k1=functional_params["k1"],
         k3=functional_params["k3"],
         a1=functional_params["a1"],
         a2=functional_params["a2"],
         s6=functional_params["s6"],
         s8=functional_params["s8"],
-        exp_threshold=functional_params.get("exp_threshold", -12.0),
         device=str(device),
     )
+
+    # Handle return value - dftd3 returns (energy, forces, coord_num) or (energy, forces, coord_num, virial)
+    if len(result) == 4:
+        energy, forces, coord_num, _ = result
+    else:
+        energy, forces, coord_num = result
 
     # Convert results to numpy
     coord_num_np = coord_num.detach().cpu().numpy()
     energy_scalar = float(energy.detach().cpu().numpy()[0])
-    energy_per_atom_np = energy_per_atom.detach().cpu().numpy()
     force_np = forces.detach().cpu().numpy()
 
     return WarpResults(
         coord_num=coord_num_np,
         energy=energy_scalar,
-        energy_per_atom=energy_per_atom_np,
+        energy_per_atom=np.zeros(num_atoms),  # Not returned by new API
         force=force_np,
     )
 
@@ -790,35 +791,35 @@ def build_neighbor_list(
     # Prepare inputs for neighbor_list
     coord = torch.tensor(positions, dtype=torch.float32, device=device)
     pbc = torch.tensor([True, True, True], dtype=torch.bool, device=device)
+    cell = torch.tensor(structure.lattice.matrix, dtype=torch.float32, device=device)
 
-    # Handle cell tensor - must be 3D shape (1, 3, 3) or (batch, 3, 3)
-    cell = torch.tensor(
-        structure.lattice.matrix, dtype=torch.float32, device=device
-    ).unsqueeze(0)
-
-    # Use internal neighbor_list function
-    # Returns: idx_i, idx_j, unit_shifts, cartesian_shifts
-    edge_src, edge_dst, _, _ = neighbor_list(coord, cell, pbc, cutoff_ang)
-
-    # Convert edge indices to neighbor matrix format for Warp
-    neighbors_per_atom = [[] for _ in range(num_atoms)]
-    for src, dst in zip(edge_src.tolist(), edge_dst.tolist()):
-        if src != dst:  # Exclude self-interactions
-            neighbors_per_atom[src].append(dst)
-
-    max_neighbors = (
-        max(len(n) for n in neighbors_per_atom) if any(neighbors_per_atom) else 1
+    # Use internal neighbor_list function with new API
+    # Returns: neighbor_matrix, num_neighbors, neighbor_matrix_shifts
+    neighbor_matrix, num_neighbors, _ = neighbor_list(
+        coord,
+        cutoff_ang,
+        cell=cell,
+        pbc=pbc,
+        method="cell_list",
+        return_neighbor_list=False,
     )
 
-    # Pad to max_neighbors
-    neighbor_matrix = torch.full(
-        (num_atoms, max_neighbors), num_atoms, dtype=torch.int32, device=device
-    )
-    for i, neighbors in enumerate(neighbors_per_atom):
-        if neighbors:
-            neighbor_matrix[i, : len(neighbors)] = torch.tensor(
-                neighbors, dtype=torch.int32, device=device
-            )
+    # Also build edge list for torch-dftd
+    edge_src_list = []
+    edge_dst_list = []
+
+    for i in range(num_atoms):
+        n_neighbors = int(num_neighbors[i].item())
+        for k in range(n_neighbors):
+            j = int(neighbor_matrix[i, k].item())
+            if j < num_atoms:  # Valid neighbor (not padding)
+                edge_src_list.append(i)
+                edge_dst_list.append(j)
+
+    edge_src = torch.tensor(edge_src_list, dtype=torch.int64, device=device)
+    edge_dst = torch.tensor(edge_dst_list, dtype=torch.int64, device=device)
+
+    max_neighbors = int(neighbor_matrix.shape[1])
 
     return edge_src, edge_dst, neighbor_matrix, max_neighbors
 
