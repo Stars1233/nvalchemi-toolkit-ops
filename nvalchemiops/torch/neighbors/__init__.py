@@ -22,19 +22,40 @@ from __future__ import annotations
 
 import torch
 
-from nvalchemiops.torch.neighbors.batched import (
+# Batch cell list functions
+from nvalchemiops.torch.neighbors.batch_cell_list import (
     batch_cell_list,
-    batch_naive_neighbor_list,
-    batch_naive_neighbor_list_dual_cutoff,
     estimate_batch_cell_list_sizes,
 )
-from nvalchemiops.torch.neighbors.neighbor_utils import prepare_batch_idx_ptr
-from nvalchemiops.torch.neighbors.unbatched import (
+
+# Batch naive functions
+from nvalchemiops.torch.neighbors.batch_naive import (
+    batch_naive_neighbor_list,
+)
+
+# Batch naive dual cutoff functions
+from nvalchemiops.torch.neighbors.batch_naive_dual_cutoff import (
+    batch_naive_neighbor_list_dual_cutoff,
+)
+
+# Unbatched cell list functions
+from nvalchemiops.torch.neighbors.cell_list import (
     cell_list,
     estimate_cell_list_sizes,
+)
+
+# Unbatched naive functions
+from nvalchemiops.torch.neighbors.naive import (
     naive_neighbor_list,
+)
+
+# Unbatched naive dual cutoff functions
+from nvalchemiops.torch.neighbors.naive_dual_cutoff import (
     naive_neighbor_list_dual_cutoff,
 )
+
+# Utility functions
+from nvalchemiops.torch.neighbors.neighbor_utils import prepare_batch_idx_ptr
 
 
 def neighbor_list(
