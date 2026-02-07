@@ -24,19 +24,19 @@ Unbatched Algorithms
 Naive Algorithm
 ^^^^^^^^^^^^^^^
 
-.. autofunction:: nvalchemiops.torch.neighbors.unbatched.naive_neighbor_list
+.. autofunction:: nvalchemiops.torch.neighbors.naive_neighbor_list
 
 Cell List Algorithm
 ^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: nvalchemiops.torch.neighbors.unbatched.cell_list
-.. autofunction:: nvalchemiops.torch.neighbors.unbatched.build_cell_list
-.. autofunction:: nvalchemiops.torch.neighbors.unbatched.query_cell_list
+.. autofunction:: nvalchemiops.torch.neighbors.cell_list
+.. autofunction:: nvalchemiops.torch.neighbors.cell_list.build_cell_list
+.. autofunction:: nvalchemiops.torch.neighbors.cell_list.query_cell_list
 
 Dual Cutoff Algorithm
 ^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: nvalchemiops.torch.neighbors.unbatched.naive_neighbor_list_dual_cutoff
+.. autofunction:: nvalchemiops.torch.neighbors.naive_neighbor_list_dual_cutoff
 
 Batched Algorithms
 ------------------
@@ -44,19 +44,19 @@ Batched Algorithms
 Batched Naive Algorithm
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: nvalchemiops.torch.neighbors.batched.batch_naive_neighbor_list
+.. autofunction:: nvalchemiops.torch.neighbors.batch_naive_neighbor_list
 
 Batched Cell List Algorithm
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: nvalchemiops.torch.neighbors.batched.batch_cell_list
-.. autofunction:: nvalchemiops.torch.neighbors.batched.batch_build_cell_list
-.. autofunction:: nvalchemiops.torch.neighbors.batched.batch_query_cell_list
+.. autofunction:: nvalchemiops.torch.neighbors.batch_cell_list
+.. autofunction:: nvalchemiops.torch.neighbors.batch_cell_list.batch_build_cell_list
+.. autofunction:: nvalchemiops.torch.neighbors.batch_cell_list.batch_query_cell_list
 
 Batched Dual Cutoff Algorithm
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: nvalchemiops.torch.neighbors.batched.batch_naive_neighbor_list_dual_cutoff
+.. autofunction:: nvalchemiops.torch.neighbors.batch_naive_neighbor_list_dual_cutoff
 
 Rebuild Detection
 -----------------
@@ -70,6 +70,6 @@ Utility Functions
 -----------------
 
 .. autofunction:: nvalchemiops.torch.neighbors.estimate_cell_list_sizes
-.. autofunction:: nvalchemiops.torch.neighbors.neighbor_utils.estimate_max_neighbors
 .. autofunction:: nvalchemiops.torch.neighbors.estimate_batch_cell_list_sizes
 .. autofunction:: nvalchemiops.torch.neighbors.neighbor_utils.allocate_cell_list
+.. autofunction:: nvalchemiops.torch.neighbors.neighbor_utils.prepare_batch_idx_ptr

@@ -200,8 +200,8 @@ def neighbor_list(
             - If ``return_neighbor_list=False`` (default): Returns ``num_neighbors`` with shape (total_atoms,), dtype int32.
               Count of neighbors found for each atom.
             - If ``return_neighbor_list=True``: Returns ``neighbor_ptr`` with shape (total_atoms + 1,), dtype int32.
-            CSR-style pointer arrays where ``neighbor_ptr_data[i]`` to ``neighbor_ptr_data[i+1]`` gives the range of
-            neighbors for atom i in the flattened neighbor list.
+              CSR-style pointer arrays where ``neighbor_ptr_data[i]`` to ``neighbor_ptr_data[i+1]`` gives the range of
+              neighbors for atom i in the flattened neighbor list.
 
         - **neighbor_shift_data** (tensor, optional): Periodic shift vectors, only when ``pbc`` is provided:
           format depends on ``return_neighbor_list``:
@@ -209,7 +209,7 @@ def neighbor_list(
             - If ``return_neighbor_list=False`` (default): Returns ``neighbor_matrix_shifts`` with
               shape (total_atoms, max_neighbors, 3), dtype int32.
             - If ``return_neighbor_list=True``: Returns ``unit_shifts`` with shape
-            (num_pairs, 3), dtype int32.
+              (num_pairs, 3), dtype int32.
 
         When ``cutoff2`` is provided, the pattern repeats for the second cutoff with interleaved
         components (neighbor_data2, num_neighbor_data2, neighbor_shift_data2) appended to the tuple.
