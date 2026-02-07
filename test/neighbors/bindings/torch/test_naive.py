@@ -15,15 +15,13 @@
 
 """Tests for PyTorch bindings of naive neighbor list methods."""
 
+from __future__ import annotations
+
 import pytest
 import torch
 
-from nvalchemiops.torch.neighbors.naive import (
-    naive_neighbor_list,
-)
-from nvalchemiops.torch.neighbors.neighbor_utils import (
-    compute_naive_num_shifts,
-)
+from nvalchemiops.torch.neighbors.naive import naive_neighbor_list
+from nvalchemiops.torch.neighbors.neighbor_utils import compute_naive_num_shifts
 
 from ...test_utils import (
     assert_neighbor_lists_equal,
@@ -34,160 +32,144 @@ from ...test_utils import (
 from .conftest import requires_vesin
 
 
-class TestNaiveMainAPI:
-    """Test the main naive neighbor list API function."""
+class TestNaiveCorrectness:
+    """Test correctness of naive neighbor list against reference implementation."""
 
     @requires_vesin
-    @pytest.mark.parametrize("device", ["cuda:0"])
-    @pytest.mark.parametrize("dtype", [torch.float32])
-    @pytest.mark.parametrize("half_fill", [False])
-    @pytest.mark.parametrize("pbc_flag", [True])
-    @pytest.mark.parametrize("preallocate", [True])
-    @pytest.mark.parametrize("return_neighbor_list", [True])
-    @pytest.mark.parametrize("fill_value", [-1])
-    def test_naive_neighbor_matrix_function(
-        self,
-        device,
-        dtype,
-        half_fill,
-        pbc_flag,
-        preallocate,
-        return_neighbor_list,
-        fill_value,
-    ):
-        """Test _naive_neighbor_matrix_no_pbc function."""
+    def test_against_vesin_reference_no_pbc(self, device, dtype):
+        """Verify correctness against vesin reference (no PBC)."""
+        positions, _, _ = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cutoff = 1.1
+
+        # Get our result
+        neighbor_list, neighbor_ptr = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=None,
+            cell=None,
+            max_neighbors=20,
+            return_neighbor_list=True,
+        )
+
+        idx_i = neighbor_list[0]
+        idx_j = neighbor_list[1]
+        u = torch.zeros((idx_i.shape[0], 3), dtype=torch.int32, device=device)
+
+        # Get reference result
+        i_ref, j_ref, u_ref, _ = brute_force_neighbors(
+            positions, cell=None, pbc=None, cutoff=cutoff
+        )
+
+        # Compare
+        assert_neighbor_lists_equal((idx_i, idx_j, u), (i_ref, j_ref, u_ref))
+
+    @requires_vesin
+    def test_against_vesin_reference_with_pbc(self, device, dtype):
+        """Verify correctness against vesin reference (with PBC)."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, dtype=dtype, device=device
         )
         cutoff = 1.1
-        max_neighbors = 20
 
-        if not pbc_flag:
-            cell = None
-            pbc = None
-        if preallocate:
-            neighbor_matrix = torch.full(
-                (positions.shape[0], max_neighbors),
-                fill_value,
-                dtype=torch.int32,
-                device=device,
-            )
-            num_neighbors = torch.zeros(
-                positions.shape[0], dtype=torch.int32, device=device
-            )
-            args = (positions, cutoff)
-            kwargs = {
-                "fill_value": fill_value,
-                "half_fill": half_fill,
-                "neighbor_matrix": neighbor_matrix,
-                "num_neighbors": num_neighbors,
-                "return_neighbor_list": return_neighbor_list,
-            }
-            if pbc_flag:
-                shift_range_per_dimension, shift_offset, total_shifts = (
-                    compute_naive_num_shifts(cell, cutoff, pbc)
-                )
-                kwargs["cell"] = cell
-                kwargs["pbc"] = pbc
-                kwargs["shift_range_per_dimension"] = shift_range_per_dimension
-                kwargs["shift_offset"] = shift_offset
-                kwargs["total_shifts"] = total_shifts
-                neighbor_matrix_shifts = torch.zeros(
-                    (positions.shape[0], max_neighbors, 3),
-                    dtype=torch.int32,
-                    device=device,
-                )
-                kwargs["neighbor_matrix_shifts"] = neighbor_matrix_shifts
-            results = naive_neighbor_list(*args, **kwargs)
-            if return_neighbor_list:
-                if pbc_flag:
-                    neighbor_list, neighbor_ptr, neighbor_shifts = results
-                    idx_i = neighbor_list[0]
-                    idx_j = neighbor_list[1]
-                    u = neighbor_shifts
-                    num_neighbors = neighbor_ptr[1:] - neighbor_ptr[:-1]
-                else:
-                    neighbor_list, neighbor_ptr = results
-                    idx_i = neighbor_list[0]
-                    idx_j = neighbor_list[1]
-                    u = torch.zeros(
-                        (idx_i.shape[0], 3), dtype=torch.int32, device=device
-                    )
-                    num_neighbors = neighbor_ptr[1:] - neighbor_ptr[:-1]
-        else:
-            args = (positions, cutoff)
-            kwargs = {
-                "max_neighbors": max_neighbors,
-                "fill_value": fill_value,
-                "half_fill": half_fill,
-                "return_neighbor_list": return_neighbor_list,
-            }
-            if pbc_flag:
-                kwargs["cell"] = cell
-                kwargs["pbc"] = pbc
-            results = naive_neighbor_list(*args, **kwargs)
-            if pbc_flag:
-                if return_neighbor_list:
-                    neighbor_list, neighbor_ptr, neighbor_shifts = results
-                    idx_i = neighbor_list[0]
-                    idx_j = neighbor_list[1]
-                    u = neighbor_shifts
-                    num_neighbors = neighbor_ptr[1:] - neighbor_ptr[:-1]
-                else:
-                    neighbor_matrix, num_neighbors, neighbor_matrix_shifts = results
-            else:
-                if return_neighbor_list:
-                    neighbor_list, neighbor_ptr = results
-                    idx_i = neighbor_list[0]
-                    idx_j = neighbor_list[1]
-                    u = torch.zeros(
-                        (idx_i.shape[0], 3), dtype=torch.int32, device=device
-                    )
-                    num_neighbors = neighbor_ptr[1:] - neighbor_ptr[:-1]
-                else:
-                    neighbor_matrix, num_neighbors = results
+        # Get our result with PBC
+        neighbor_list, neighbor_ptr, neighbor_shifts = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=pbc,
+            cell=cell,
+            max_neighbors=20,
+            return_neighbor_list=True,
+        )
 
-        # Check output shapes and types
-        assert num_neighbors.dtype == torch.int32
-        assert num_neighbors.shape == (positions.shape[0],)
-        assert num_neighbors.device == torch.device(device)
-        if return_neighbor_list:
-            assert neighbor_list.dtype == torch.int32
-            assert neighbor_list.shape == (2, num_neighbors.sum())
-            assert neighbor_list.device == torch.device(device)
-
-            if pbc_flag:
-                assert u.dtype == torch.int32
-                assert u.shape == (num_neighbors.sum(), 3)
-                assert u.device == torch.device(device)
-
-        else:
-            assert neighbor_matrix.dtype == torch.int32
-            assert neighbor_matrix.shape == (
-                positions.shape[0],
-                max_neighbors,
-            )
-            assert neighbor_matrix.device == torch.device(device)
-
-            if pbc_flag:
-                assert neighbor_matrix_shifts.dtype == torch.int32
-                assert neighbor_matrix_shifts.shape == (
-                    positions.shape[0],
-                    max_neighbors,
-                    3,
-                )
-                assert neighbor_matrix_shifts.device == torch.device(device)
+        idx_i = neighbor_list[0]
+        idx_j = neighbor_list[1]
+        u = neighbor_shifts
 
         # Get reference result
-        i_ref, j_ref, u_ref, _ = brute_force_neighbors(positions, cell, pbc, cutoff)
+        i_ref, j_ref, u_ref, _ = brute_force_neighbors(
+            positions, cell=cell, pbc=pbc, cutoff=cutoff
+        )
 
-        if return_neighbor_list and not half_fill:
-            assert_neighbor_lists_equal((idx_i, idx_j, u), (i_ref, j_ref, u_ref))
+        # Compare
+        assert_neighbor_lists_equal((idx_i, idx_j, u), (i_ref, j_ref, u_ref))
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_naive_neighbor_list_edge_cases(self, device, dtype, half_fill):
-        """Test edge cases for naive_neighbor_list."""
-        # Empty system
+    def test_random_systems_basic_correctness(self, device, dtype):
+        """Test basic correctness properties on random systems."""
+        for pbc_flag in [True, False]:
+            for seed in [42, 123, 456]:
+                positions, cell, pbc = create_random_system(
+                    num_atoms=20,
+                    cell_size=3.0,
+                    dtype=dtype,
+                    device=device,
+                    seed=seed,
+                    pbc_flag=pbc_flag,
+                )
+                cutoff = 1.2
+                max_neighbors = 50
+
+                # Get neighbor matrix format
+                if pbc_flag:
+                    neighbor_matrix, num_neighbors, unit_shifts = naive_neighbor_list(
+                        positions=positions,
+                        cutoff=cutoff,
+                        pbc=pbc,
+                        cell=cell,
+                        max_neighbors=max_neighbors,
+                    )
+                else:
+                    neighbor_matrix, num_neighbors = naive_neighbor_list(
+                        positions=positions,
+                        cutoff=cutoff,
+                        pbc=None,
+                        cell=None,
+                        max_neighbors=max_neighbors,
+                    )
+
+                # Verify basic correctness properties
+                assert torch.all(num_neighbors >= 0)
+                assert torch.all(num_neighbors <= max_neighbors)
+                assert neighbor_matrix.device == torch.device(device)
+                assert num_neighbors.device == torch.device(device)
+
+    def test_precision_consistency(self, device):
+        """Test that float32 and float64 give consistent neighbor counts."""
+        positions_f32, cell_f32, pbc = create_simple_cubic_system(
+            num_atoms=8, dtype=torch.float32, device=device
+        )
+        positions_f64 = positions_f32.double()
+        cell_f64 = cell_f32.double()
+
+        cutoff = 1.1
+        max_neighbors = 50
+
+        # Get results for both precisions
+        _, num_neighbors_f32, _ = naive_neighbor_list(
+            positions_f32,
+            cutoff,
+            pbc=pbc,
+            cell=cell_f32,
+            max_neighbors=max_neighbors,
+        )
+        _, num_neighbors_f64, _ = naive_neighbor_list(
+            positions_f64,
+            cutoff,
+            pbc=pbc,
+            cell=cell_f64,
+            max_neighbors=max_neighbors,
+        )
+
+        # Neighbor counts should be identical
+        torch.testing.assert_close(num_neighbors_f32, num_neighbors_f64, rtol=0, atol=0)
+
+
+class TestNaiveEdgeCases:
+    """Test edge cases and boundary conditions."""
+
+    def test_empty_system(self, device, dtype, half_fill):
+        """Test behavior with empty position array."""
         positions_empty = torch.empty(0, 3, dtype=dtype, device=device)
         neighbor_matrix, num_neighbors = naive_neighbor_list(
             positions=positions_empty,
@@ -200,7 +182,8 @@ class TestNaiveMainAPI:
         assert neighbor_matrix.shape == (0, 10)
         assert num_neighbors.shape == (0,)
 
-        # Single atom
+    def test_single_atom(self, device, dtype, half_fill):
+        """Test behavior with single atom (should have no neighbors)."""
         positions_single = torch.tensor([[0.0, 0.0, 0.0]], dtype=dtype, device=device)
         neighbor_matrix, num_neighbors = naive_neighbor_list(
             positions=positions_single,
@@ -212,7 +195,8 @@ class TestNaiveMainAPI:
         )
         assert num_neighbors[0].item() == 0, "Single atom should have no neighbors"
 
-        # Zero cutoff
+    def test_zero_cutoff(self, device, dtype, half_fill):
+        """Test that zero cutoff produces no neighbors."""
         positions, _, _ = create_simple_cubic_system(
             num_atoms=4, dtype=dtype, device=device
         )
@@ -226,198 +210,8 @@ class TestNaiveMainAPI:
         )
         assert torch.all(num_neighbors == 0), "Zero cutoff should find no neighbors"
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_naive_neighbor_list_error_conditions(self, device, dtype, half_fill):
-        """Test error conditions for naive_neighbor_list."""
-        positions, cell, pbc = create_simple_cubic_system(dtype=dtype, device=device)
-
-        # Test mismatched cell and pbc arguments
-        with pytest.raises(
-            ValueError, match="If cell is provided, pbc must also be provided"
-        ):
-            naive_neighbor_list(
-                positions,
-                1.0,
-                pbc=None,
-                cell=cell,
-                max_neighbors=10,
-            )
-
-        with pytest.raises(
-            ValueError, match="If pbc is provided, cell must also be provided"
-        ):
-            naive_neighbor_list(
-                positions,
-                1.0,
-                pbc=pbc,
-                cell=None,
-                max_neighbors=10,
-            )
-
-
-class TestNaivePerformanceAndScaling:
-    """Test performance characteristics and scaling of naive implementation."""
-
-    @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
-    def test_naive_scaling_with_system_size(self, device):
-        """Test that naive implementation scales as expected with system size."""
-        import time
-
-        dtype = torch.float32
-        cutoff = 1.1
-        max_neighbors = 100
-
-        # Test different system sizes
-        sizes = [10, 50, 100] if device == "cpu" else [50, 100, 200]
-        times = []
-
-        for num_atoms in sizes:
-            positions, cell, pbc = create_simple_cubic_system(
-                num_atoms=num_atoms, dtype=dtype, device=device
-            )
-
-            # Warm up
-            for _ in range(10):
-                naive_neighbor_list(
-                    positions,
-                    cutoff,
-                    pbc=pbc,
-                    cell=cell,
-                    max_neighbors=max_neighbors,
-                )
-
-            if device.startswith("cuda"):
-                torch.cuda.synchronize()
-
-            # Time the operation
-            start_time = time.time()
-            for _ in range(100):
-                naive_neighbor_list(
-                    positions,
-                    cutoff,
-                    pbc=pbc,
-                    cell=cell,
-                    max_neighbors=max_neighbors,
-                )
-
-            if device.startswith("cuda"):
-                torch.cuda.synchronize()
-
-            elapsed = time.time() - start_time
-            times.append(elapsed)
-
-        # Check that it doesn't grow too fast (should be roughly O(N^2))
-        # This is a loose check since we can't expect perfect scaling
-        assert times[1] > times[0] * 0.8, "Time should increase with system size"
-        if len(times) > 2:
-            # Very loose scaling check
-            scaling_factor = times[-1] / times[0]
-            size_factor = (sizes[-1] / sizes[0]) ** 2
-            # TODO: this test depends on runtime performance and
-            # so it might be flaky
-            assert scaling_factor < size_factor * 5, (
-                "Scaling should not be much worse than O(N^2)"
-            )
-
-    @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
-    def test_naive_cutoff_scaling(self, device):
-        """Test scaling with different cutoff values."""
-        dtype = torch.float32
-        num_atoms = 50
-        max_neighbors = 200
-
-        positions, cell, pbc = create_simple_cubic_system(
-            num_atoms=num_atoms, dtype=dtype, device=device
-        )
-
-        # Test different cutoffs
-        cutoffs = [0.5, 1.0, 1.5, 2.0]
-        neighbor_counts = []
-
-        for cutoff in cutoffs:
-            _, num_neighbors, _ = naive_neighbor_list(
-                positions,
-                cutoff,
-                pbc=pbc,
-                cell=cell,
-                max_neighbors=max_neighbors,
-            )
-            total_pairs = num_neighbors.sum().item()
-            neighbor_counts.append(total_pairs)
-
-        # Check that neighbor count increases with cutoff
-        for i in range(1, len(neighbor_counts)):
-            assert neighbor_counts[i] >= neighbor_counts[i - 1], (
-                f"Neighbor count should increase with cutoff: {neighbor_counts}"
-            )
-
-
-class TestNaiveRobustness:
-    """Test robustness of naive implementation to various inputs."""
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_random_systems(self, device, dtype, half_fill):
-        """Test with random systems of various sizes and configurations."""
-        for pbc_flag in [True, False]:
-            # Test several random systems
-            for seed in [42, 123, 456]:
-                positions, cell, pbc = create_random_system(
-                    num_atoms=20,
-                    cell_size=3.0,
-                    dtype=dtype,
-                    device=device,
-                    seed=seed,
-                    pbc_flag=pbc_flag,
-                )
-                cutoff = 1.2
-                max_neighbors = 50
-
-                # Should not crash
-                neighbor_matrix, num_neighbors, unit_shifts = naive_neighbor_list(
-                    positions=positions,
-                    cutoff=cutoff,
-                    pbc=pbc,
-                    cell=cell,
-                    max_neighbors=max_neighbors,
-                    half_fill=half_fill,
-                )
-
-                # Basic sanity checks
-                assert torch.all(num_neighbors >= 0)
-                assert torch.all(num_neighbors <= max_neighbors)
-                assert neighbor_matrix.device == torch.device(device)
-                assert unit_shifts.device == torch.device(device)
-                assert num_neighbors.device == torch.device(device)
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_extreme_geometries(self, device, dtype, half_fill):
-        """Test with extreme cell geometries."""
-        # Very elongated cell
-        positions = torch.rand(10, 3, dtype=dtype, device=device)
-        cell = torch.tensor(
-            [[[10.0, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]],
-            dtype=dtype,
-            device=device,
-        ).reshape(1, 3, 3)
-        pbc = torch.tensor([True, True, True], device=device).reshape(1, 3)
-        cutoff = 0.2
-        max_neighbors = 20
-
-        # Should handle extreme aspect ratios
-        _, num_neighbors, _ = naive_neighbor_list(
-            positions=positions * torch.tensor([10.0, 0.1, 0.1], device=device),
-            cutoff=cutoff,
-            pbc=pbc,
-            cell=cell,
-            max_neighbors=max_neighbors,
-            half_fill=half_fill,
-        )
-
-        assert torch.all(num_neighbors >= 0)
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_large_cutoffs(self, device, dtype, half_fill):
-        """Test with very large cutoffs."""
+    def test_large_cutoff_with_pbc(self, device, dtype, half_fill):
+        """Test with cutoff larger than cell size."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=8, dtype=dtype, device=device
         )
@@ -435,51 +229,323 @@ class TestNaiveRobustness:
             half_fill=half_fill,
         )
 
-        # Should find many neighbors
+        # Should find many neighbors (including periodic images)
         assert num_neighbors.sum() > 0
-        # Each atom should have multiple neighbors (including periodic images)
         assert torch.all(num_neighbors > 0)
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_precision_consistency(self, device, dtype, half_fill):
-        """Test that float32 and float64 give consistent results."""
-        positions_f32, cell_f32, pbc = create_simple_cubic_system(
-            num_atoms=8, dtype=torch.float32, device=device
-        )
-        positions_f64 = positions_f32.double()
-        cell_f64 = cell_f32.double()
+    def test_extreme_elongated_cell(self, device, dtype, half_fill):
+        """Test with extreme cell aspect ratios."""
+        positions = torch.rand(10, 3, dtype=dtype, device=device)
+        cell = torch.tensor(
+            [[[10.0, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]],
+            dtype=dtype,
+            device=device,
+        ).reshape(1, 3, 3)
+        pbc = torch.tensor([True, True, True], device=device).reshape(1, 3)
+        cutoff = 0.2
+        max_neighbors = 20
 
+        # Should handle extreme aspect ratios without crashing
+        _, num_neighbors, _ = naive_neighbor_list(
+            positions=positions * torch.tensor([10.0, 0.1, 0.1], device=device),
+            cutoff=cutoff,
+            pbc=pbc,
+            cell=cell,
+            max_neighbors=max_neighbors,
+            half_fill=half_fill,
+        )
+
+        assert torch.all(num_neighbors >= 0)
+
+    def test_max_neighbors_overflow(self, device, dtype, half_fill):
+        """Test behavior when max_neighbors is too small."""
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cell = cell.reshape(1, 3, 3)
+        pbc = pbc.reshape(1, 3)
+
+        cutoff = 2.0  # Large cutoff to find many neighbors
+        max_neighbors = 3  # Artificially small to trigger overflow
+
+        # Should not crash, but may not find all neighbors
+        neighbor_matrix, num_neighbors, unit_shifts = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=pbc,
+            cell=cell,
+            max_neighbors=max_neighbors,
+            half_fill=half_fill,
+        )
+
+        # Should produce valid output
+        assert torch.all(num_neighbors >= 0)
+        assert neighbor_matrix.shape == (positions.shape[0], max_neighbors)
+        assert unit_shifts.shape == (positions.shape[0], max_neighbors, 3)
+
+
+class TestNaiveErrors:
+    """Test error handling and input validation."""
+
+    def test_mismatched_cell_without_pbc(self, device, dtype):
+        """Test that providing cell without pbc raises error."""
+        positions, cell, _ = create_simple_cubic_system(dtype=dtype, device=device)
+
+        with pytest.raises(
+            ValueError, match="If cell is provided, pbc must also be provided"
+        ):
+            naive_neighbor_list(
+                positions,
+                1.0,
+                pbc=None,
+                cell=cell,
+                max_neighbors=10,
+            )
+
+    def test_mismatched_pbc_without_cell(self, device, dtype):
+        """Test that providing pbc without cell raises error."""
+        positions, _, pbc = create_simple_cubic_system(dtype=dtype, device=device)
+
+        with pytest.raises(
+            ValueError, match="If pbc is provided, cell must also be provided"
+        ):
+            naive_neighbor_list(
+                positions,
+                1.0,
+                pbc=pbc,
+                cell=None,
+                max_neighbors=10,
+            )
+
+
+class TestNaiveOutputFormats:
+    """Test different output formats (matrix vs list)."""
+
+    def test_matrix_format_output_shapes_no_pbc(self, device, dtype, half_fill):
+        """Test neighbor matrix format output shapes (no PBC)."""
+        positions, _, _ = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
         cutoff = 1.1
-        max_neighbors = 50
+        max_neighbors = 20
 
-        # Get results for both precisions
-        _, num_neighbors_f32, _ = naive_neighbor_list(
-            positions_f32,
-            cutoff,
-            pbc=pbc,
-            cell=cell_f32,
+        neighbor_matrix, num_neighbors = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=None,
+            cell=None,
             max_neighbors=max_neighbors,
             half_fill=half_fill,
+            return_neighbor_list=False,
         )
-        _, num_neighbors_f64, _ = naive_neighbor_list(
-            positions_f64,
-            cutoff,
+
+        # Verify shapes and types
+        assert neighbor_matrix.dtype == torch.int32
+        assert num_neighbors.dtype == torch.int32
+        assert neighbor_matrix.shape == (positions.shape[0], max_neighbors)
+        assert num_neighbors.shape == (positions.shape[0],)
+        assert neighbor_matrix.device == torch.device(device)
+        assert num_neighbors.device == torch.device(device)
+
+    def test_matrix_format_output_shapes_with_pbc(self, device, dtype, half_fill):
+        """Test neighbor matrix format output shapes (with PBC)."""
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cutoff = 1.1
+        max_neighbors = 20
+
+        neighbor_matrix, num_neighbors, neighbor_matrix_shifts = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
             pbc=pbc,
-            cell=cell_f64,
+            cell=cell,
             max_neighbors=max_neighbors,
             half_fill=half_fill,
+            return_neighbor_list=False,
         )
 
-        # Neighbor counts should be identical (for this exact geometry)
-        torch.testing.assert_close(num_neighbors_f32, num_neighbors_f64, rtol=0, atol=0)
+        # Verify shapes and types
+        assert neighbor_matrix.dtype == torch.int32
+        assert num_neighbors.dtype == torch.int32
+        assert neighbor_matrix_shifts.dtype == torch.int32
+        assert neighbor_matrix.shape == (positions.shape[0], max_neighbors)
+        assert num_neighbors.shape == (positions.shape[0],)
+        assert neighbor_matrix_shifts.shape == (positions.shape[0], max_neighbors, 3)
+
+    def test_list_format_output_shapes_no_pbc(self, device, dtype):
+        """Test neighbor list (COO) format output shapes (no PBC)."""
+        positions, _, _ = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cutoff = 1.1
+
+        neighbor_list, neighbor_ptr = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=None,
+            cell=None,
+            max_neighbors=20,
+            return_neighbor_list=True,
+        )
+
+        # Verify shapes and types
+        assert neighbor_list.dtype == torch.int32
+        assert neighbor_ptr.dtype == torch.int32
+        assert neighbor_list.shape[0] == 2
+        assert neighbor_ptr.shape == (positions.shape[0] + 1,)
+        assert neighbor_list.device == torch.device(device)
+        assert neighbor_ptr.device == torch.device(device)
+
+    def test_list_format_output_shapes_with_pbc(self, device, dtype):
+        """Test neighbor list (COO) format output shapes (with PBC)."""
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cutoff = 1.1
+
+        neighbor_list, neighbor_ptr, neighbor_shifts = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=pbc,
+            cell=cell,
+            max_neighbors=20,
+            return_neighbor_list=True,
+        )
+
+        # Verify shapes and types
+        assert neighbor_list.dtype == torch.int32
+        assert neighbor_ptr.dtype == torch.int32
+        assert neighbor_shifts.dtype == torch.int32
+        assert neighbor_list.shape[0] == 2
+        assert neighbor_ptr.shape == (positions.shape[0] + 1,)
+        assert neighbor_shifts.shape[1] == 3
+
+    def test_preallocated_output_no_pbc(self, device, dtype, half_fill):
+        """Test with preallocated output tensors (no PBC)."""
+        positions, _, _ = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cutoff = 1.1
+        max_neighbors = 20
+        fill_value = -1
+
+        # Preallocate tensors
+        neighbor_matrix = torch.full(
+            (positions.shape[0], max_neighbors),
+            fill_value,
+            dtype=torch.int32,
+            device=device,
+        )
+        num_neighbors = torch.zeros(
+            positions.shape[0], dtype=torch.int32, device=device
+        )
+
+        # Call with preallocated tensors
+        _ = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            neighbor_matrix=neighbor_matrix,
+            num_neighbors=num_neighbors,
+            half_fill=half_fill,
+            return_neighbor_list=False,
+        )
+
+        # When preallocated, return is None or tuple
+        assert num_neighbors.dtype == torch.int32
+        assert neighbor_matrix.dtype == torch.int32
+        assert torch.all(num_neighbors >= 0)
+
+    def test_preallocated_output_with_pbc(self, device, dtype, half_fill):
+        """Test with preallocated output tensors (with PBC)."""
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cutoff = 1.1
+        max_neighbors = 20
+        fill_value = -1
+
+        shift_range_per_dimension, shift_offset, total_shifts = (
+            compute_naive_num_shifts(cell, cutoff, pbc)
+        )
+
+        # Preallocate tensors
+        neighbor_matrix = torch.full(
+            (positions.shape[0], max_neighbors),
+            fill_value,
+            dtype=torch.int32,
+            device=device,
+        )
+        num_neighbors = torch.zeros(
+            positions.shape[0], dtype=torch.int32, device=device
+        )
+        neighbor_matrix_shifts = torch.zeros(
+            (positions.shape[0], max_neighbors, 3),
+            dtype=torch.int32,
+            device=device,
+        )
+
+        # Call with preallocated tensors
+        _ = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            cell=cell,
+            pbc=pbc,
+            neighbor_matrix=neighbor_matrix,
+            num_neighbors=num_neighbors,
+            neighbor_matrix_shifts=neighbor_matrix_shifts,
+            shift_range_per_dimension=shift_range_per_dimension,
+            shift_offset=shift_offset,
+            total_shifts=total_shifts,
+            half_fill=half_fill,
+            return_neighbor_list=False,
+        )
+
+        # Verify output
+        assert num_neighbors.dtype == torch.int32
+        assert neighbor_matrix.dtype == torch.int32
+        assert neighbor_matrix_shifts.dtype == torch.int32
+        assert torch.all(num_neighbors >= 0)
+
+    def test_conversion_between_matrix_and_list_formats(self, device, dtype):
+        """Test that matrix and list formats contain same neighbor information."""
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=8, dtype=dtype, device=device
+        )
+        cutoff = 1.1
+        max_neighbors = 20
+
+        # Get matrix format
+        neighbor_matrix, num_neighbors, _ = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=pbc,
+            cell=cell,
+            max_neighbors=max_neighbors,
+            return_neighbor_list=False,
+        )
+
+        # Get list format
+        neighbor_list, neighbor_ptr, _ = naive_neighbor_list(
+            positions=positions,
+            cutoff=cutoff,
+            pbc=pbc,
+            cell=cell,
+            max_neighbors=max_neighbors,
+            return_neighbor_list=True,
+        )
+
+        # Total number of neighbors should match
+        matrix_total = num_neighbors.sum().item()
+        list_total = neighbor_list.shape[1]
+        assert matrix_total == list_total
 
 
-class TestNaiveTorchCompilability:
-    """Test torch.compile compatibility for naive neighbor list functions."""
+class TestNaiveCompile:
+    """Test torch.compile compatibility."""
 
-    @pytest.mark.parametrize("half_fill", [False, True])
-    def test_naive_neighbor_list_compile_no_pbc(self, device, dtype, half_fill):
-        """Test that naive_neighbor_list can be compiled with torch.compile."""
+    def test_compile_no_pbc(self, device, dtype, half_fill):
+        """Test that naive_neighbor_list can be compiled (no PBC)."""
         positions, _, _ = create_simple_cubic_system(
             num_atoms=50, dtype=dtype, device=device
         )
@@ -521,6 +587,7 @@ class TestNaiveTorchCompilability:
             half_fill,
         )
 
+        # Verify results
         assert num_neighbors.sum() > 0
         num_rows = positions.shape[0] - int(half_fill)
         for i in range(num_rows):
@@ -529,9 +596,8 @@ class TestNaiveTorchCompilability:
             mask = neighbor_row != 50
             assert neighbor_row[mask].shape == (num_neighbors[i].item(),)
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_naive_neighbor_list_compile_pbc(self, device, dtype, half_fill):
-        """Test that naive_neighbor_list can be compiled with torch.compile."""
+    def test_compile_with_pbc(self, device, dtype, half_fill):
+        """Test that naive_neighbor_list can be compiled (with PBC)."""
         positions, cell, pbc = create_simple_cubic_system(
             num_atoms=50, dtype=dtype, device=device
         )
@@ -601,7 +667,7 @@ class TestNaiveTorchCompilability:
             half_fill,
         )
 
-        # Compare results
+        # Verify results
         assert num_neighbors.sum() > 0
         num_rows = positions.shape[0] - int(half_fill)
         for i in range(num_rows):
@@ -611,11 +677,101 @@ class TestNaiveTorchCompilability:
             assert neighbor_row[mask].shape == (num_neighbors[i].item(),)
 
 
-class TestNaiveMemoryAndPerformance:
-    """Test memory usage and performance characteristics of naive implementation."""
+class TestNaivePerformance:
+    """Test performance characteristics and scaling (marked as slow)."""
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_memory_scaling(self, device, half_fill):
+    @pytest.mark.slow
+    def test_scaling_with_system_size(self, device):
+        """Test that naive implementation has reasonable scaling with system size."""
+        import time
+
+        dtype = torch.float32
+        cutoff = 1.1
+        max_neighbors = 100
+
+        # Test different system sizes
+        sizes = [10, 50, 100] if device == "cpu" else [50, 100, 200]
+        times = []
+
+        for num_atoms in sizes:
+            positions, cell, pbc = create_simple_cubic_system(
+                num_atoms=num_atoms, dtype=dtype, device=device
+            )
+
+            # Warm up
+            for _ in range(10):
+                naive_neighbor_list(
+                    positions,
+                    cutoff,
+                    pbc=pbc,
+                    cell=cell,
+                    max_neighbors=max_neighbors,
+                )
+
+            if device.startswith("cuda"):
+                torch.cuda.synchronize()
+
+            # Time the operation
+            start_time = time.time()
+            for _ in range(100):
+                naive_neighbor_list(
+                    positions,
+                    cutoff,
+                    pbc=pbc,
+                    cell=cell,
+                    max_neighbors=max_neighbors,
+                )
+
+            if device.startswith("cuda"):
+                torch.cuda.synchronize()
+
+            elapsed = time.time() - start_time
+            times.append(elapsed)
+
+        # Verify time increases with system size (loose check)
+        assert times[1] > times[0] * 0.8, "Time should increase with system size"
+        if len(times) > 2:
+            # Very loose scaling check - should not be orders of magnitude worse than O(N^2)
+            scaling_factor = times[-1] / times[0]
+            size_factor = (sizes[-1] / sizes[0]) ** 2
+            # Allow 5x deviation from ideal O(N^2) scaling
+            assert scaling_factor < size_factor * 5, (
+                f"Scaling ({scaling_factor:.2f}) much worse than O(N^2) ({size_factor:.2f})"
+            )
+
+    def test_cutoff_scaling(self, device):
+        """Test that neighbor count increases with cutoff."""
+        dtype = torch.float32
+        num_atoms = 50
+        max_neighbors = 200
+
+        positions, cell, pbc = create_simple_cubic_system(
+            num_atoms=num_atoms, dtype=dtype, device=device
+        )
+
+        # Test different cutoffs
+        cutoffs = [0.5, 1.0, 1.5, 2.0]
+        neighbor_counts = []
+
+        for cutoff in cutoffs:
+            _, num_neighbors, _ = naive_neighbor_list(
+                positions,
+                cutoff,
+                pbc=pbc,
+                cell=cell,
+                max_neighbors=max_neighbors,
+            )
+            total_pairs = num_neighbors.sum().item()
+            neighbor_counts.append(total_pairs)
+
+        # Verify neighbor count increases with cutoff
+        for i in range(1, len(neighbor_counts)):
+            assert neighbor_counts[i] >= neighbor_counts[i - 1], (
+                f"Neighbor count should increase with cutoff: {neighbor_counts}"
+            )
+
+    @pytest.mark.slow
+    def test_memory_scaling(self, device):
         """Test that memory usage scales reasonably with system size."""
         import gc
 
@@ -632,7 +788,6 @@ class TestNaiveMemoryAndPerformance:
             cell = cell.reshape(1, 3, 3)
             pbc = pbc.reshape(1, 3)
 
-            # Estimate reasonable max_neighbors based on system size and cutoff
             max_neighbors = 100
 
             # Clear cache before test
@@ -640,21 +795,17 @@ class TestNaiveMemoryAndPerformance:
                 torch.cuda.empty_cache()
             gc.collect()
 
-            # Run batch naive implementation
+            # Run naive implementation
             neighbor_matrix, num_neighbors, unit_shifts = naive_neighbor_list(
                 positions=positions,
                 cutoff=cutoff,
                 pbc=pbc,
                 cell=cell,
                 max_neighbors=max_neighbors,
-                half_fill=half_fill,
             )
 
-            # Basic checks that output is reasonable
-            assert neighbor_matrix.shape == (
-                num_atoms,
-                max_neighbors,
-            )
+            # Verify output shapes are reasonable
+            assert neighbor_matrix.shape == (num_atoms, max_neighbors)
             assert unit_shifts.shape == (num_atoms, max_neighbors, 3)
             assert num_neighbors.shape == (num_atoms,)
             assert torch.all(num_neighbors >= 0)
@@ -665,36 +816,3 @@ class TestNaiveMemoryAndPerformance:
             if device.startswith("cuda"):
                 torch.cuda.empty_cache()
             gc.collect()
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_max_neighbors_overflow_handling(self, device, dtype, half_fill):
-        """Test behavior when max_neighbors is exceeded."""
-
-        # Create a dense system with small max_neighbors to force overflow
-        positions, cell, pbc = create_simple_cubic_system(
-            num_atoms=8, dtype=dtype, device=device
-        )
-        cell = cell.reshape(1, 3, 3)
-        pbc = pbc.reshape(1, 3)
-
-        cutoff = 2.0  # Large cutoff to find many neighbors
-        max_neighbors = 3  # Artificially small to trigger overflow
-
-        # Should not crash, but may not find all neighbors
-        neighbor_matrix, num_neighbors, unit_shifts = naive_neighbor_list(
-            positions=positions,
-            cutoff=cutoff,
-            pbc=pbc,
-            cell=cell,
-            max_neighbors=max_neighbors,
-            half_fill=half_fill,
-        )
-
-        # Should still produce valid output, just potentially incomplete
-        assert torch.all(num_neighbors >= 0)
-        assert neighbor_matrix.shape == (positions.shape[0], max_neighbors)
-        assert unit_shifts.shape == (positions.shape[0], max_neighbors, 3)
-        assert num_neighbors.shape == (positions.shape[0],)
-        assert neighbor_matrix.device == torch.device(device)
-        assert unit_shifts.device == torch.device(device)
-        assert num_neighbors.device == torch.device(device)

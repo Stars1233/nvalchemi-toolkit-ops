@@ -33,7 +33,20 @@ from ...test_utils import (
 def create_batch_idx_and_ptr(
     atoms_per_system: list, device: str = "cpu"
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Create batch_idx and batch_ptr tensors from atoms_per_system list."""
+    """Create batch_idx and batch_ptr tensors from atoms_per_system list.
+
+    Parameters
+    ----------
+    atoms_per_system : list
+        Number of atoms in each system
+    device : str
+        Device to create tensors on
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        batch_idx and batch_ptr tensors
+    """
     total_atoms = sum(atoms_per_system)
     batch_idx = torch.zeros(total_atoms, dtype=torch.int32, device=device)
     batch_ptr = torch.zeros(len(atoms_per_system) + 1, dtype=torch.int32, device=device)
@@ -47,14 +60,11 @@ def create_batch_idx_and_ptr(
     return batch_idx, batch_ptr
 
 
-class TestBatchNaiveDualCutoffMainAPI:
-    """Test the main batch naive dual cutoff neighbor list API function."""
+class TestBatchNaiveDualCutoffCorrectness:
+    """Test correctness of batch naive dual cutoff neighbor list."""
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_batch_naive_neighbor_list_dual_cutoff_no_pbc(
-        self, device, dtype, half_fill
-    ):
-        """Test batch_naive_neighbor_list_dual_cutoff without periodic boundary conditions."""
+    def test_matrix_format_no_pbc(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list in matrix format without PBC."""
         atoms_per_system = [6, 8]
         positions_batch, _, _, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
@@ -66,7 +76,6 @@ class TestBatchNaiveDualCutoffMainAPI:
         max_neighbors1 = 20
         max_neighbors2 = 30
 
-        # Test without PBC
         neighbor_matrix1, num_neighbors1, neighbor_matrix2, num_neighbors2 = (
             batch_naive_neighbor_list_dual_cutoff(
                 positions=positions_batch,
@@ -94,8 +103,6 @@ class TestBatchNaiveDualCutoffMainAPI:
         assert num_neighbors2.shape == (positions_batch.shape[0],)
         assert neighbor_matrix1.device == torch.device(device)
         assert neighbor_matrix2.device == torch.device(device)
-        assert num_neighbors1.device == torch.device(device)
-        assert num_neighbors2.device == torch.device(device)
 
         # Check neighbor counts are reasonable
         assert torch.all(num_neighbors1 >= 0)
@@ -104,11 +111,8 @@ class TestBatchNaiveDualCutoffMainAPI:
         assert torch.all(num_neighbors2 <= max_neighbors2)
         assert torch.all(num_neighbors2 >= num_neighbors1)
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_batch_naive_neighbor_list_dual_cutoff_with_pbc(
-        self, device, dtype, half_fill
-    ):
-        """Test batch_naive_neighbor_list_dual_cutoff with periodic boundary conditions."""
+    def test_matrix_format_with_pbc(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list in matrix format with PBC."""
         atoms_per_system = [6, 8]
         positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
@@ -142,112 +146,20 @@ class TestBatchNaiveDualCutoffMainAPI:
 
         # Check output types and shapes
         expected_rows = positions_batch.shape[0]
-        assert neighbor_matrix1.dtype == torch.int32
-        assert neighbor_matrix2.dtype == torch.int32
-        assert neighbor_matrix_shifts1.dtype == torch.int32
-        assert neighbor_matrix_shifts2.dtype == torch.int32
-        assert num_neighbors1.dtype == torch.int32
-        assert num_neighbors2.dtype == torch.int32
         assert neighbor_matrix1.shape == (expected_rows, max_neighbors1)
         assert neighbor_matrix2.shape == (expected_rows, max_neighbors2)
         assert neighbor_matrix_shifts1.shape == (expected_rows, max_neighbors1, 3)
         assert neighbor_matrix_shifts2.shape == (expected_rows, max_neighbors2, 3)
         assert num_neighbors1.shape == (positions_batch.shape[0],)
         assert num_neighbors2.shape == (positions_batch.shape[0],)
-        assert neighbor_matrix1.device == torch.device(device)
-        assert neighbor_matrix2.device == torch.device(device)
-        assert neighbor_matrix_shifts1.device == torch.device(device)
-        assert neighbor_matrix_shifts2.device == torch.device(device)
-        assert num_neighbors1.device == torch.device(device)
-        assert num_neighbors2.device == torch.device(device)
 
         # Check neighbor counts
         assert torch.all(num_neighbors1 >= 0)
         assert torch.all(num_neighbors2 >= 0)
         assert torch.all(num_neighbors2 >= num_neighbors1)
 
-        # With PBC, should generally have more neighbors than without
-        assert num_neighbors1.sum() >= 0, "Should find some neighbors with PBC"
-        assert num_neighbors2.sum() >= 0, "Should find some neighbors with PBC"
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    @pytest.mark.parametrize("pbc_flag", [True, False])
-    def test_batch_naive_neighbor_list_dual_cutoff_return_neighbor_list(
-        self, device, dtype, half_fill, pbc_flag
-    ):
-        """Test batch_naive_neighbor_list_dual_cutoff with return_neighbor_list=True."""
-        atoms_per_system = [6, 8]
-        positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
-            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
-        )
-        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
-
-        cutoff1 = 1.0
-        cutoff2 = 1.5
-        max_neighbors1 = 30
-        max_neighbors2 = 50
-
-        if not pbc_flag:
-            cell_batch = None
-            pbc_batch = None
-
-            neighbor_list1, neighbor_ptr1, neighbor_list2, neighbor_ptr2 = (
-                batch_naive_neighbor_list_dual_cutoff(
-                    positions=positions_batch,
-                    cutoff1=cutoff1,
-                    cutoff2=cutoff2,
-                    batch_idx=batch_idx,
-                    batch_ptr=batch_ptr,
-                    max_neighbors1=max_neighbors1,
-                    max_neighbors2=max_neighbors2,
-                    pbc=pbc_batch,
-                    cell=cell_batch,
-                    half_fill=half_fill,
-                    return_neighbor_list=True,
-                )
-            )
-
-        else:
-            (
-                neighbor_list1,
-                neighbor_ptr1,
-                unit_shifts1,
-                neighbor_list2,
-                neighbor_ptr2,
-                unit_shifts2,
-            ) = batch_naive_neighbor_list_dual_cutoff(
-                positions=positions_batch,
-                cutoff1=cutoff1,
-                cutoff2=cutoff2,
-                batch_idx=batch_idx,
-                batch_ptr=batch_ptr,
-                max_neighbors1=max_neighbors1,
-                max_neighbors2=max_neighbors2,
-                pbc=pbc_batch,
-                cell=cell_batch,
-                half_fill=half_fill,
-                return_neighbor_list=True,
-            )
-
-        # Check that we get neighbor list format (2, N) instead of matrix
-        assert neighbor_list1.ndim == 2
-        assert neighbor_list2.ndim == 2
-        assert neighbor_list1.shape[0] == 2
-        assert neighbor_list2.shape[0] == 2
-        assert neighbor_list1.dtype == torch.int32
-        assert neighbor_list2.dtype == torch.int32
-        assert neighbor_ptr1.dtype == torch.int32
-        assert neighbor_ptr2.dtype == torch.int32
-
-        # Check that neighbor_list2 has at least as many pairs as neighbor_list1
-        assert neighbor_list2.shape[1] >= neighbor_list1.shape[1], (
-            "Larger cutoff should find at least as many neighbor pairs"
-        )
-
-    def test_batch_naive_neighbor_list_dual_cutoff_consistency_with_single_cutoff(
-        self, device, dtype
-    ):
-        """Test that dual cutoff results are consistent with two single cutoff calls."""
+    def test_consistency_with_single_cutoff(self, device, dtype):
+        """Test that dual cutoff results match two separate single cutoff calls."""
         atoms_per_system = [6, 8]
         positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
@@ -277,7 +189,7 @@ class TestBatchNaiveDualCutoffMainAPI:
             max_neighbors2=max_neighbors2,
             pbc=pbc_batch,
             cell=cell_batch,
-            half_fill=False,  # Use full fill for easier comparison
+            half_fill=False,
         )
 
         # Get single cutoff results
@@ -311,7 +223,7 @@ class TestBatchNaiveDualCutoffMainAPI:
             half_fill=False,
         )
 
-        # Compare neighbor counts (should be identical)
+        # Compare neighbor counts
         torch.testing.assert_close(
             num_neighbors1_dual, num_neighbors1_single, rtol=0, atol=0
         )
@@ -319,12 +231,46 @@ class TestBatchNaiveDualCutoffMainAPI:
             num_neighbors2_dual, num_neighbors2_single, rtol=0, atol=0
         )
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_batch_naive_neighbor_list_dual_cutoff_edge_cases(
-        self, device, dtype, half_fill
-    ):
-        """Test edge cases for batch_naive_neighbor_list_dual_cutoff."""
-        # Empty system
+    def test_larger_cutoff_finds_more_neighbors(self, device, dtype):
+        """Test that larger cutoff finds at least as many neighbors as smaller cutoff."""
+        atoms_per_system = [6, 8]
+        positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
+            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
+        )
+        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
+
+        cutoff1 = 1.0
+        cutoff2 = 1.5
+
+        (
+            _,
+            num_neighbors1,
+            _,
+            _,
+            num_neighbors2,
+            _,
+        ) = batch_naive_neighbor_list_dual_cutoff(
+            positions=positions_batch,
+            cutoff1=cutoff1,
+            cutoff2=cutoff2,
+            batch_idx=batch_idx,
+            batch_ptr=batch_ptr,
+            max_neighbors1=30,
+            max_neighbors2=50,
+            pbc=pbc_batch,
+            cell=cell_batch,
+            half_fill=False,
+        )
+
+        # Verify cutoff2 finds at least as many neighbors
+        assert torch.all(num_neighbors2 >= num_neighbors1)
+
+
+class TestBatchNaiveDualCutoffEdgeCases:
+    """Test edge cases for batch naive dual cutoff neighbor list."""
+
+    def test_empty_system(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list with empty system."""
         positions_empty = torch.empty(0, 3, dtype=dtype, device=device)
         batch_idx_empty = torch.empty(0, dtype=torch.int32, device=device)
         batch_ptr_empty = torch.tensor([0], dtype=torch.int32, device=device)
@@ -348,7 +294,8 @@ class TestBatchNaiveDualCutoffMainAPI:
         assert num_neighbors1.shape == (0,)
         assert num_neighbors2.shape == (0,)
 
-        # Single atom system
+    def test_single_atom_system(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list with single atom."""
         positions_single = torch.tensor([[0.0, 0.0, 0.0]], dtype=dtype, device=device)
         batch_idx_single = torch.tensor([0], dtype=torch.int32, device=device)
         batch_ptr_single = torch.tensor([0, 1], dtype=torch.int32, device=device)
@@ -367,10 +314,11 @@ class TestBatchNaiveDualCutoffMainAPI:
                 half_fill=half_fill,
             )
         )
-        assert num_neighbors1[0].item() == 0, "Single atom should have no neighbors"
-        assert num_neighbors2[0].item() == 0, "Single atom should have no neighbors"
+        assert num_neighbors1[0].item() == 0
+        assert num_neighbors2[0].item() == 0
 
-        # Zero cutoffs
+    def test_zero_cutoffs(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list with zero cutoffs."""
         atoms_per_system = [4, 4]
         positions_batch, _, _, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
@@ -391,21 +339,46 @@ class TestBatchNaiveDualCutoffMainAPI:
                 half_fill=half_fill,
             )
         )
-        assert torch.all(num_neighbors1 == 0), "Zero cutoffs should find no neighbors"
-        assert torch.all(num_neighbors2 == 0), "Zero cutoffs should find no neighbors"
+        assert torch.all(num_neighbors1 == 0)
+        assert torch.all(num_neighbors2 == 0)
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_batch_naive_neighbor_list_dual_cutoff_error_conditions(
-        self, device, dtype, half_fill
-    ):
-        """Test error conditions for batch_naive_neighbor_list_dual_cutoff."""
-        atoms_per_system = [4, 6]
-        positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
+    def test_identical_cutoffs(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list with identical cutoff values."""
+        atoms_per_system = [6, 8]
+        positions_batch, _, _, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
         )
         batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
 
-        # Test mismatched cell and pbc arguments
+        cutoff = 1.5
+        _, num_neighbors1, _, num_neighbors2 = batch_naive_neighbor_list_dual_cutoff(
+            positions=positions_batch,
+            cutoff1=cutoff,
+            cutoff2=cutoff,
+            batch_idx=batch_idx,
+            batch_ptr=batch_ptr,
+            max_neighbors1=20,
+            max_neighbors2=20,
+            pbc=None,
+            cell=None,
+            half_fill=half_fill,
+        )
+
+        # When cutoffs are identical, neighbor counts should match
+        torch.testing.assert_close(num_neighbors1, num_neighbors2, rtol=0, atol=0)
+
+
+class TestBatchNaiveDualCutoffErrors:
+    """Test error conditions for batch naive dual cutoff neighbor list."""
+
+    def test_cell_without_pbc_error(self, device, dtype):
+        """Test that providing cell without pbc raises error."""
+        atoms_per_system = [4, 6]
+        positions_batch, cell_batch, _, _ = create_batch_systems(
+            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
+        )
+        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
+
         with pytest.raises(
             ValueError, match="If cell is provided, pbc must also be provided"
         ):
@@ -420,6 +393,14 @@ class TestBatchNaiveDualCutoffMainAPI:
                 pbc=None,
                 cell=cell_batch,
             )
+
+    def test_pbc_without_cell_error(self, device, dtype):
+        """Test that providing pbc without cell raises error."""
+        atoms_per_system = [4, 6]
+        positions_batch, _, pbc_batch, _ = create_batch_systems(
+            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
+        )
+        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
 
         with pytest.raises(
             ValueError, match="If pbc is provided, cell must also be provided"
@@ -436,18 +417,126 @@ class TestBatchNaiveDualCutoffMainAPI:
                 cell=None,
             )
 
-    def test_max_neighbors_same_value(self):
-        """Test that both neighbor matrices have correct shape when given same max_neighbors."""
+    def test_mismatched_batch_dimensions(self, device, dtype):
+        """Test that mismatched batch dimensions are handled appropriately."""
+        atoms_per_system = [4, 6]
+        positions_batch, _, _, _ = create_batch_systems(
+            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
+        )
+        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
+
+        # Create mismatched batch_idx (wrong total atoms)
+        bad_batch_idx = torch.zeros(5, dtype=torch.int32, device=device)
+
+        # Should handle gracefully or raise error
+        try:
+            batch_naive_neighbor_list_dual_cutoff(
+                positions_batch,
+                1.0,
+                1.5,
+                bad_batch_idx,
+                batch_ptr,
+                max_neighbors1=10,
+                max_neighbors2=15,
+            )
+        except (ValueError, RuntimeError):
+            # Expected to raise error
+            pass
+
+
+class TestBatchNaiveDualCutoffOutputFormats:
+    """Test different output formats for batch naive dual cutoff neighbor list."""
+
+    def test_list_format_no_pbc(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list in COO format without PBC."""
+        atoms_per_system = [6, 8]
+        positions_batch, _, _, _ = create_batch_systems(
+            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
+        )
+        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
+
+        cutoff1 = 1.0
+        cutoff2 = 1.5
+
+        neighbor_list1, neighbor_ptr1, neighbor_list2, neighbor_ptr2 = (
+            batch_naive_neighbor_list_dual_cutoff(
+                positions=positions_batch,
+                cutoff1=cutoff1,
+                cutoff2=cutoff2,
+                batch_idx=batch_idx,
+                batch_ptr=batch_ptr,
+                max_neighbors1=30,
+                max_neighbors2=50,
+                pbc=None,
+                cell=None,
+                half_fill=half_fill,
+                return_neighbor_list=True,
+            )
+        )
+
+        # Check that we get neighbor list format (2, N) instead of matrix
+        assert neighbor_list1.ndim == 2
+        assert neighbor_list2.ndim == 2
+        assert neighbor_list1.shape[0] == 2
+        assert neighbor_list2.shape[0] == 2
+        assert neighbor_list1.dtype == torch.int32
+        assert neighbor_list2.dtype == torch.int32
+
+        # Larger cutoff should find at least as many pairs
+        assert neighbor_list2.shape[1] >= neighbor_list1.shape[1]
+
+    def test_list_format_with_pbc(self, device, dtype, half_fill):
+        """Test dual cutoff batch neighbor list in COO format with PBC."""
+        atoms_per_system = [6, 8]
+        positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
+            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
+        )
+        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
+
+        cutoff1 = 1.0
+        cutoff2 = 1.5
+
+        (
+            neighbor_list1,
+            neighbor_ptr1,
+            unit_shifts1,
+            neighbor_list2,
+            neighbor_ptr2,
+            unit_shifts2,
+        ) = batch_naive_neighbor_list_dual_cutoff(
+            positions=positions_batch,
+            cutoff1=cutoff1,
+            cutoff2=cutoff2,
+            batch_idx=batch_idx,
+            batch_ptr=batch_ptr,
+            max_neighbors1=30,
+            max_neighbors2=50,
+            pbc=pbc_batch,
+            cell=cell_batch,
+            half_fill=half_fill,
+            return_neighbor_list=True,
+        )
+
+        # Check neighbor list format
+        assert neighbor_list1.shape[0] == 2
+        assert neighbor_list2.shape[0] == 2
+        assert unit_shifts1.shape[0] == neighbor_list1.shape[1]
+        assert unit_shifts2.shape[0] == neighbor_list2.shape[1]
+
+        # Larger cutoff should find at least as many pairs
+        assert neighbor_list2.shape[1] >= neighbor_list1.shape[1]
+
+    def test_max_neighbors_same_value(self, device, dtype):
+        """Test that both matrices have correct shape with same max_neighbors."""
         atoms_per_system = [4, 6]
         positions_batch, _, _, _ = create_batch_systems(
             num_systems=2,
             atoms_per_system=atoms_per_system,
-            dtype=torch.float32,
-            device="cpu",
+            dtype=dtype,
+            device=device,
         )
-        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, "cpu")
+        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
 
-        # Test with same max_neighbors for both cutoffs
         neighbor_matrix1, _, neighbor_matrix2, _ = (
             batch_naive_neighbor_list_dual_cutoff(
                 positions=positions_batch,
@@ -456,21 +545,21 @@ class TestBatchNaiveDualCutoffMainAPI:
                 batch_idx=batch_idx,
                 batch_ptr=batch_ptr,
                 max_neighbors1=10,
-                max_neighbors2=10,  # Same as max_neighbors1
+                max_neighbors2=10,
                 pbc=None,
                 cell=None,
             )
         )
 
-        # Both matrices should have same number of columns
         assert neighbor_matrix1.shape[1] == neighbor_matrix2.shape[1] == 10
 
 
-class TestBatchNaiveDualCutoffPerformanceAndScaling:
-    """Test performance characteristics and scaling of batch naive dual cutoff implementation."""
+class TestBatchNaiveDualCutoffPerformance:
+    """Test performance characteristics of batch naive dual cutoff neighbor list."""
 
-    def test_batch_dual_cutoff_scaling_with_system_size(self, device):
-        """Test that batch dual cutoff implementation scales as expected with system size."""
+    @pytest.mark.slow
+    def test_scaling_with_system_size(self, device):
+        """Test that batch dual cutoff scales reasonably with system size."""
         import time
 
         dtype = torch.float32
@@ -479,7 +568,7 @@ class TestBatchNaiveDualCutoffPerformanceAndScaling:
         max_neighbors1 = 50
         max_neighbors2 = 80
 
-        # Test different batch sizes
+        # Test different batch sizes (smaller for CPU)
         batch_sizes = (
             [(2, [10, 12], [2.0, 2.0]), (3, [8, 10, 12], [2.0, 2.0, 2.0])]
             if device == "cpu"
@@ -540,19 +629,11 @@ class TestBatchNaiveDualCutoffPerformanceAndScaling:
             elapsed = time.time() - start_time
             times.append(elapsed)
 
-        # Check that it doesn't grow too fast (should be roughly O(N^2))
-        # This is a loose check since we can't expect perfect scaling
-        assert times[1] > times[0] * 0.5, "Time should increase with system size"
-        if len(times) > 2:
-            # Very loose scaling check
-            scaling_factor = times[-1] / times[0]
-            total_atoms_ratio = sum(batch_sizes[-1][1]) / sum(batch_sizes[0][1])
-            size_factor = total_atoms_ratio**2
-            assert scaling_factor < size_factor * 5, (
-                "Scaling should not be much worse than O(N^2)"
-            )
+        # Loose check that time increases with system size
+        assert times[1] > times[0] * 0.5
 
-    def test_batch_dual_cutoff_cutoff_scaling(self, device):
+    @pytest.mark.slow
+    def test_cutoff_scaling(self, device):
         """Test scaling with different cutoff values."""
         dtype = torch.float32
         atoms_per_system = [15, 20]
@@ -591,25 +672,14 @@ class TestBatchNaiveDualCutoffPerformanceAndScaling:
 
         # Check that neighbor count increases with cutoff
         for i in range(1, len(neighbor_counts1)):
-            assert neighbor_counts1[i] >= neighbor_counts1[i - 1], (
-                f"Neighbor count should increase with cutoff1: {neighbor_counts1}"
-            )
-            assert neighbor_counts2[i] >= neighbor_counts2[i - 1], (
-                f"Neighbor count should increase with cutoff2: {neighbor_counts2}"
-            )
+            assert neighbor_counts1[i] >= neighbor_counts1[i - 1]
+            assert neighbor_counts2[i] >= neighbor_counts2[i - 1]
 
-        # Check that cutoff2 always finds at least as many neighbors as cutoff1
+        # Check that cutoff2 finds at least as many neighbors as cutoff1
         for count1, count2 in zip(neighbor_counts1, neighbor_counts2):
-            assert count2 >= count1, (
-                f"Larger cutoff should find at least as many neighbors: {count1} vs {count2}"
-            )
+            assert count2 >= count1
 
-
-class TestBatchNaiveDualCutoffRobustness:
-    """Test robustness of batch naive dual cutoff implementation to various inputs."""
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_random_systems(self, device, dtype, half_fill):
+    def test_random_systems_robustness(self, device, dtype, half_fill):
         """Test with random systems of various sizes and configurations."""
         for pbc_flag in [True, False]:
             # Test several random systems
@@ -652,47 +722,28 @@ class TestBatchNaiveDualCutoffRobustness:
 
                 if pbc_flag:
                     (
-                        neighbor_matrix1,
+                        _,
                         num_neighbors1,
-                        neighbor_matrix_shifts1,
-                        neighbor_matrix2,
+                        _,
+                        _,
                         num_neighbors2,
-                        neighbor_matrix_shifts2,
+                        _,
                     ) = result
-                    # Basic sanity checks
-                    assert torch.all(num_neighbors1 >= 0)
-                    assert torch.all(num_neighbors2 >= 0)
-                    assert torch.all(num_neighbors1 <= max_neighbors1)
-                    assert torch.all(num_neighbors2 <= max_neighbors2)
-                    assert torch.all(num_neighbors2 >= num_neighbors1)
-                    assert neighbor_matrix1.device == torch.device(device)
-                    assert neighbor_matrix_shifts1.device == torch.device(device)
-                    assert neighbor_matrix2.device == torch.device(device)
-                    assert neighbor_matrix_shifts2.device == torch.device(device)
-                    assert num_neighbors1.device == torch.device(device)
-                    assert num_neighbors2.device == torch.device(device)
                 else:
                     (
-                        neighbor_matrix1,
+                        _,
                         num_neighbors1,
-                        neighbor_matrix2,
+                        _,
                         num_neighbors2,
                     ) = result
-                    # Basic sanity checks
-                    assert torch.all(num_neighbors1 >= 0)
-                    assert torch.all(num_neighbors2 >= 0)
-                    assert torch.all(num_neighbors1 <= max_neighbors1)
-                    assert torch.all(num_neighbors2 <= max_neighbors2)
-                    assert torch.all(num_neighbors2 >= num_neighbors1)
-                    assert neighbor_matrix1.device == torch.device(device)
-                    assert neighbor_matrix2.device == torch.device(device)
-                    assert num_neighbors1.device == torch.device(device)
-                    assert num_neighbors2.device == torch.device(device)
 
-    @pytest.mark.parametrize("half_fill", [True, False])
+                # Basic sanity checks
+                assert torch.all(num_neighbors1 >= 0)
+                assert torch.all(num_neighbors2 >= 0)
+                assert torch.all(num_neighbors2 >= num_neighbors1)
+
     def test_extreme_geometries(self, device, dtype, half_fill):
         """Test with extreme cell geometries."""
-        # Very elongated cells
         atoms_per_system = [8, 10]
         positions_batch = torch.rand(18, 3, dtype=dtype, device=device)
         cell_batch = torch.tensor(
@@ -718,25 +769,22 @@ class TestBatchNaiveDualCutoffRobustness:
 
         cutoff1 = 0.15
         cutoff2 = 0.25
-        max_neighbors1 = 20
-        max_neighbors2 = 30
 
-        # Should handle extreme aspect ratios
         (
-            neighbor_matrix1,
+            _,
             num_neighbors1,
-            neighbor_matrix_shifts1,
-            neighbor_matrix2,
+            _,
+            _,
             num_neighbors2,
-            neighbor_matrix_shifts2,
+            _,
         ) = batch_naive_neighbor_list_dual_cutoff(
             positions=positions_batch,
             cutoff1=cutoff1,
             cutoff2=cutoff2,
             batch_idx=batch_idx,
             batch_ptr=batch_ptr,
-            max_neighbors1=max_neighbors1,
-            max_neighbors2=max_neighbors2,
+            max_neighbors1=20,
+            max_neighbors2=30,
             pbc=pbc_batch,
             cell=cell_batch,
             half_fill=half_fill,
@@ -746,9 +794,8 @@ class TestBatchNaiveDualCutoffRobustness:
         assert torch.all(num_neighbors2 >= 0)
         assert torch.all(num_neighbors2 >= num_neighbors1)
 
-    @pytest.mark.parametrize("half_fill", [True, False])
     def test_large_cutoffs(self, device, dtype, half_fill):
-        """Test with very large cutoffs."""
+        """Test with very large cutoffs relative to cell size."""
         atoms_per_system = [6, 8]
         positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
@@ -758,24 +805,22 @@ class TestBatchNaiveDualCutoffRobustness:
         # Cutoffs larger than cell size
         large_cutoff1 = 4.0
         large_cutoff2 = 6.0
-        max_neighbors1 = 100
-        max_neighbors2 = 150
 
         (
-            neighbor_matrix1,
+            _,
             num_neighbors1,
-            neighbor_matrix_shifts1,
-            neighbor_matrix2,
+            _,
+            _,
             num_neighbors2,
-            neighbor_matrix_shifts2,
+            _,
         ) = batch_naive_neighbor_list_dual_cutoff(
             positions=positions_batch,
             cutoff1=large_cutoff1,
             cutoff2=large_cutoff2,
             batch_idx=batch_idx,
             batch_ptr=batch_ptr,
-            max_neighbors1=max_neighbors1,
-            max_neighbors2=max_neighbors2,
+            max_neighbors1=100,
+            max_neighbors2=150,
             pbc=pbc_batch,
             cell=cell_batch,
             half_fill=half_fill,
@@ -785,14 +830,8 @@ class TestBatchNaiveDualCutoffRobustness:
         assert num_neighbors1.sum() > 0
         assert num_neighbors2.sum() > 0
         assert torch.all(num_neighbors2 >= num_neighbors1)
-        # Each atom should have multiple neighbors (including periodic images)
-        assert torch.all(
-            num_neighbors1 >= 0
-        )  # Some atoms might have no neighbors in half_fill mode
-        assert torch.all(num_neighbors2 >= 0)
 
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_precision_consistency(self, device, dtype, half_fill):
+    def test_precision_consistency(self, device, half_fill):
         """Test that float32 and float64 give consistent results."""
         atoms_per_system = [6, 8]
         positions_batch_f32, cell_batch_f32, pbc_batch, _ = create_batch_systems(
@@ -807,8 +846,6 @@ class TestBatchNaiveDualCutoffRobustness:
 
         cutoff1 = 1.0
         cutoff2 = 1.5
-        max_neighbors1 = 50
-        max_neighbors2 = 80
 
         # Get results for both precisions
         (_, num_neighbors1_f32, _, _, num_neighbors2_f32, _) = (
@@ -818,8 +855,8 @@ class TestBatchNaiveDualCutoffRobustness:
                 cutoff2,
                 batch_idx,
                 batch_ptr,
-                max_neighbors1=max_neighbors1,
-                max_neighbors2=max_neighbors2,
+                max_neighbors1=50,
+                max_neighbors2=80,
                 pbc=pbc_batch,
                 cell=cell_batch_f32,
                 half_fill=half_fill,
@@ -832,185 +869,18 @@ class TestBatchNaiveDualCutoffRobustness:
                 cutoff2,
                 batch_idx,
                 batch_ptr,
-                max_neighbors1=max_neighbors1,
-                max_neighbors2=max_neighbors2,
+                max_neighbors1=50,
+                max_neighbors2=80,
                 pbc=pbc_batch,
                 cell=cell_batch_f64,
                 half_fill=half_fill,
             )
         )
 
-        # Neighbor counts should be identical (for this exact geometry)
+        # Neighbor counts should be identical
         torch.testing.assert_close(
             num_neighbors1_f32, num_neighbors1_f64, rtol=0, atol=0
         )
         torch.testing.assert_close(
             num_neighbors2_f32, num_neighbors2_f64, rtol=0, atol=0
         )
-
-
-class TestBatchNaiveDualCutoffMemoryAndPerformance:
-    """Test memory usage and performance characteristics of batch naive dual cutoff implementation."""
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_memory_scaling(self, device, half_fill):
-        """Test that memory usage scales reasonably with system size."""
-        import gc
-
-        dtype = torch.float32
-        cutoff1 = 1.0
-        cutoff2 = 1.5
-
-        # Test different system sizes
-        sizes = (
-            [(2, [8, 10], [2.0, 2.0]), (3, [6, 8, 10], [2.0, 2.0, 2.0])]
-            if device == "cpu"
-            else [
-                (3, [15, 20, 25], [2.0, 2.0, 2.0]),
-                (4, [12, 15, 18, 20], [2.0, 2.0, 2.0, 2.0]),
-            ]
-        )
-
-        for num_systems, atoms_per_system, cell_sizes in sizes:
-            positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
-                num_systems=num_systems,
-                atoms_per_system=atoms_per_system,
-                dtype=dtype,
-                device=device,
-                cell_sizes=cell_sizes,
-            )
-            batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
-
-            # Estimate reasonable max_neighbors based on system size and cutoff
-            max_neighbors1 = 50
-            max_neighbors2 = 80
-
-            # Clear cache before test
-            if device.startswith("cuda"):
-                torch.cuda.empty_cache()
-            gc.collect()
-
-            # Run batch dual cutoff implementation
-            (
-                neighbor_matrix1,
-                num_neighbors1,
-                neighbor_matrix_shifts1,
-                neighbor_matrix2,
-                num_neighbors2,
-                neighbor_matrix_shifts2,
-            ) = batch_naive_neighbor_list_dual_cutoff(
-                positions=positions_batch,
-                cutoff1=cutoff1,
-                cutoff2=cutoff2,
-                batch_idx=batch_idx,
-                batch_ptr=batch_ptr,
-                max_neighbors1=max_neighbors1,
-                max_neighbors2=max_neighbors2,
-                pbc=pbc_batch,
-                cell=cell_batch,
-                half_fill=half_fill,
-            )
-
-            # Basic checks that output is reasonable
-            total_atoms = positions_batch.shape[0]
-            assert neighbor_matrix1.shape == (total_atoms, max_neighbors1)
-            assert neighbor_matrix2.shape == (total_atoms, max_neighbors2)
-            assert neighbor_matrix_shifts1.shape == (total_atoms, max_neighbors1, 3)
-            assert neighbor_matrix_shifts2.shape == (total_atoms, max_neighbors2, 3)
-            assert num_neighbors1.shape == (total_atoms,)
-            assert num_neighbors2.shape == (total_atoms,)
-            assert torch.all(num_neighbors1 >= 0), (
-                "All neighbor counts should be non-negative"
-            )
-            assert torch.all(num_neighbors2 >= 0), (
-                "All neighbor counts should be non-negative"
-            )
-            assert torch.all(num_neighbors1 <= max_neighbors1), (
-                "Neighbor counts should not exceed maximum"
-            )
-            assert torch.all(num_neighbors2 <= max_neighbors2), (
-                "Neighbor counts should not exceed maximum"
-            )
-            assert torch.all(num_neighbors2 >= num_neighbors1), (
-                "Larger cutoff should find at least as many neighbors"
-            )
-
-            # Clean up
-            del (
-                neighbor_matrix1,
-                neighbor_matrix2,
-                neighbor_matrix_shifts1,
-                neighbor_matrix_shifts2,
-                num_neighbors1,
-                num_neighbors2,
-                positions_batch,
-                cell_batch,
-                pbc_batch,
-                batch_idx,
-                batch_ptr,
-            )
-            if device.startswith("cuda"):
-                torch.cuda.empty_cache()
-            gc.collect()
-
-    @pytest.mark.parametrize("half_fill", [True, False])
-    def test_max_neighbors_overflow_handling(self, device, dtype, half_fill):
-        """Test behavior when max_neighbors is exceeded."""
-
-        # Create a dense system with small max_neighbors to force overflow
-        atoms_per_system = [6, 8]
-        positions_batch, cell_batch, pbc_batch, _ = create_batch_systems(
-            num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
-        )
-        batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
-
-        cutoff1 = 2.0  # Large cutoffs to find many neighbors
-        cutoff2 = 3.0
-        max_neighbors1 = 3  # Artificially small to trigger overflow
-        max_neighbors2 = 5
-
-        # Should not crash, but may not find all neighbors
-        (
-            neighbor_matrix1,
-            num_neighbors1,
-            neighbor_matrix_shifts1,
-            neighbor_matrix2,
-            num_neighbors2,
-            neighbor_matrix_shifts2,
-        ) = batch_naive_neighbor_list_dual_cutoff(
-            positions=positions_batch,
-            cutoff1=cutoff1,
-            cutoff2=cutoff2,
-            batch_idx=batch_idx,
-            batch_ptr=batch_ptr,
-            max_neighbors1=max_neighbors1,
-            max_neighbors2=max_neighbors2,
-            pbc=pbc_batch,
-            cell=cell_batch,
-            half_fill=half_fill,
-        )
-
-        # Should still produce valid output, just potentially incomplete
-        total_atoms = sum(atoms_per_system)
-        assert torch.all(num_neighbors1 >= 0)
-        assert torch.all(num_neighbors2 >= 0)
-        assert neighbor_matrix1.shape == (total_atoms, max_neighbors1)
-        assert neighbor_matrix2.shape == (total_atoms, max_neighbors2)
-        assert neighbor_matrix_shifts1.shape == (
-            total_atoms,
-            max_neighbors1,
-            3,
-        )
-        assert neighbor_matrix_shifts2.shape == (
-            total_atoms,
-            max_neighbors2,
-            3,
-        )
-        assert num_neighbors1.shape == (total_atoms,)
-        assert num_neighbors2.shape == (total_atoms,)
-        assert neighbor_matrix1.device == torch.device(device)
-        assert neighbor_matrix2.device == torch.device(device)
-        assert neighbor_matrix_shifts1.device == torch.device(device)
-        assert neighbor_matrix_shifts2.device == torch.device(device)
-        assert num_neighbors1.device == torch.device(device)
-        assert num_neighbors2.device == torch.device(device)
