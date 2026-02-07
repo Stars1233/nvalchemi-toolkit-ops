@@ -44,13 +44,13 @@ sys.path.append(str(Path(__file__).parent.parent))
 from benchmarks.systems import create_crystal_system
 from benchmarks.utils import BenchmarkTimer
 from nvalchemiops.torch.neighbors import neighbor_list
-from nvalchemiops.torch.neighbors.batched import estimate_batch_cell_list_sizes
+from nvalchemiops.torch.neighbors.batch_cell_list import estimate_batch_cell_list_sizes
+from nvalchemiops.torch.neighbors.cell_list import estimate_cell_list_sizes
 from nvalchemiops.torch.neighbors.neighbor_utils import (
     allocate_cell_list,
     compute_naive_num_shifts,
     estimate_max_neighbors,
 )
-from nvalchemiops.torch.neighbors.unbatched import estimate_cell_list_sizes
 
 
 def get_gpu_sku() -> str:
