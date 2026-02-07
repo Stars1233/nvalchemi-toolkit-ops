@@ -232,12 +232,18 @@ def prepare_batch_idx_ptr(
     ------
     ValueError
         If both batch_idx and batch_ptr are None.
+    RuntimeError
+        If batch_idx length does not match num_atoms (only checked in eager mode).
 
     Notes
     -----
     This is a pure PyTorch utility function with no warp dependencies. It provides
     convenience for batch operations by converting between dense (batch_idx) and
     sparse (batch_ptr) batch representations.
+
+    The batch_idx size validation is only performed in eager mode to avoid graph
+    breaks during torch.compile tracing. During compiled execution, mismatched
+    sizes will result in undefined behavior.
 
     See Also
     --------
@@ -246,6 +252,14 @@ def prepare_batch_idx_ptr(
     """
     if batch_idx is None and batch_ptr is None:
         raise ValueError("Either batch_idx or batch_ptr must be provided.")
+
+    # Validate batch_idx size in eager mode only to avoid graph breaks
+    if not torch.compiler.is_compiling():
+        if batch_idx is not None and batch_idx.shape[0] != num_atoms:
+            raise RuntimeError(
+                f"batch_idx length ({batch_idx.shape[0]}) does not match "
+                f"num_atoms ({num_atoms}). batch_idx must have one entry per atom."
+            )
 
     if batch_idx is None:
         num_systems = batch_ptr.shape[0] - 1

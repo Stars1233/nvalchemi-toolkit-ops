@@ -421,6 +421,14 @@ def batch_naive_neighbor_list(
         device=positions.device,
     )
 
+    # Validate batch_idx size matches total_atoms (check here since prepare_batch_idx_ptr
+    # is @torch.compile decorated and the check would be skipped during tracing)
+    if batch_idx.shape[0] != total_atoms:
+        raise RuntimeError(
+            f"batch_idx length ({batch_idx.shape[0]}) does not match "
+            f"num_atoms ({total_atoms}). batch_idx must have one entry per atom."
+        )
+
     if pbc is None:
         _batch_naive_neighbor_matrix_no_pbc(
             positions=positions,

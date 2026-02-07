@@ -418,18 +418,19 @@ class TestBatchNaiveDualCutoffErrors:
             )
 
     def test_mismatched_batch_dimensions(self, device, dtype):
-        """Test that mismatched batch dimensions are handled appropriately."""
+        """Test that mismatched batch_idx length raises RuntimeError."""
         atoms_per_system = [4, 6]
         positions_batch, _, _, _ = create_batch_systems(
             num_systems=2, atoms_per_system=atoms_per_system, dtype=dtype, device=device
         )
         batch_idx, batch_ptr = create_batch_idx_and_ptr(atoms_per_system, device)
 
-        # Create mismatched batch_idx (wrong total atoms)
+        # Create mismatched batch_idx (wrong total atoms - 5 instead of 10)
         bad_batch_idx = torch.zeros(5, dtype=torch.int32, device=device)
 
-        # Should handle gracefully or raise error
-        try:
+        with pytest.raises(
+            RuntimeError, match="batch_idx length.*does not match num_atoms"
+        ):
             batch_naive_neighbor_list_dual_cutoff(
                 positions_batch,
                 1.0,
@@ -439,9 +440,6 @@ class TestBatchNaiveDualCutoffErrors:
                 max_neighbors1=10,
                 max_neighbors2=15,
             )
-        except (ValueError, RuntimeError):
-            # Expected to raise error
-            pass
 
 
 class TestBatchNaiveDualCutoffOutputFormats:
