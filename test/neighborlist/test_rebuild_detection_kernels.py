@@ -24,8 +24,8 @@ from nvalchemiops.neighbors.rebuild_detection import (
     check_cell_list_rebuild,
     check_neighbor_list_rebuild,
 )
+from nvalchemiops.torch.neighbors.cell_list import estimate_cell_list_sizes
 from nvalchemiops.torch.neighbors.neighbor_utils import allocate_cell_list
-from nvalchemiops.torch.neighbors.unbatched import estimate_cell_list_sizes
 from nvalchemiops.types import get_wp_dtype, get_wp_mat_dtype, get_wp_vec_dtype
 
 from .test_utils import create_simple_cubic_system

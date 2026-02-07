@@ -18,16 +18,16 @@
 import pytest
 import torch
 
+from nvalchemiops.torch.neighbors.cell_list import (
+    build_cell_list,
+    estimate_cell_list_sizes,
+)
 from nvalchemiops.torch.neighbors.neighbor_utils import allocate_cell_list
 from nvalchemiops.torch.neighbors.rebuild_detection import (
     cell_list_needs_rebuild,
     check_cell_list_rebuild_needed,
     check_neighbor_list_rebuild_needed,
     neighbor_list_needs_rebuild,
-)
-from nvalchemiops.torch.neighbors.unbatched import (
-    build_cell_list,
-    estimate_cell_list_sizes,
 )
 
 from ...test_utils import create_simple_cubic_system

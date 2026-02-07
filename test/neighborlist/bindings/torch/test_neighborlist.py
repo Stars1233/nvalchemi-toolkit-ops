@@ -19,17 +19,25 @@ import pytest
 import torch
 
 from nvalchemiops.torch.neighbors import neighbor_list
-from nvalchemiops.torch.neighbors.batched import (
+from nvalchemiops.torch.neighbors.batch_cell_list import (
     batch_cell_list,
+)
+from nvalchemiops.torch.neighbors.batch_naive import (
     batch_naive_neighbor_list,
+)
+from nvalchemiops.torch.neighbors.batch_naive_dual_cutoff import (
     batch_naive_neighbor_list_dual_cutoff,
 )
-from nvalchemiops.torch.neighbors.neighbor_utils import prepare_batch_idx_ptr
-from nvalchemiops.torch.neighbors.unbatched import (
+from nvalchemiops.torch.neighbors.cell_list import (
     cell_list,
+)
+from nvalchemiops.torch.neighbors.naive import (
     naive_neighbor_list,
+)
+from nvalchemiops.torch.neighbors.naive_dual_cutoff import (
     naive_neighbor_list_dual_cutoff,
 )
+from nvalchemiops.torch.neighbors.neighbor_utils import prepare_batch_idx_ptr
 
 from ...test_utils import (
     assert_neighbor_matrix_equal,
