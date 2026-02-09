@@ -27,7 +27,7 @@ the neighbor matrix (or equivalently, list):
 
 ```python
 import torch
-from nvalchemiops.neighborlist import cell_list
+from nvalchemiops.torch.neighbors import cell_list
 
 # Create atomic system data
 positions = torch.randn(1000, 3, device='cuda')  # 1000 atoms
@@ -73,6 +73,7 @@ print(f"Average neighbors per atom: {num_neighbors.float().mean():.1f}")
 
 about/install
 about/intro
+about/migration
 about/faq
 
 ```

@@ -16,8 +16,6 @@
 """
 DFT-D3 Dispersion Correction for a Molecule
 ============================================
-DFT-D3 Dispersion Correction for a Molecule
-============================================
 
 This example demonstrates how to compute the DFT-D3 dispersion energy
 and forces for a single molecular system using GPU-accelerated kernels.
@@ -60,7 +58,7 @@ from utils import (
     save_dftd3_parameters,
 )
 
-from nvalchemiops.neighborlist.neighborlist import neighbor_list
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Check for cached parameters, download if needed
 # This step downloads ~500 KB of reference data from the Grimme group

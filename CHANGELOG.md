@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 - 2026-XX-XX
+
+### Breaking Changes
+
+- **PyTorch is now an optional dependency**: The previous PyTorch-based functionality
+has been moved to a separate `nvalchemiops.torch` namespace. See the hosted documentation
+for a detailed migration guide. Previous imports should still be supported, however
+will issue deprecation warnings. The old interfaces will be removed in an upcoming
+release.
+
+### Added
+
+- Framework-agnostic Warp kernel layer for all modules (neighbors, electrostatics,
+  dispersion, math/spline) that operates directly on `warp.array` objects. A best
+  effort to have interfaces that mirror their framework bindings is made, however
+  due to differences in functionalities this may not always be possible.
+- Thin PyTorch bindings in `nvalchemiops.torch.*` that wrap the Warp kernels.
+- Deprecation warnings for old import paths to guide migration.
+
 ## 0.2.0 - 2025-12-19
 
 ### Added

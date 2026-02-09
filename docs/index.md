@@ -52,6 +52,14 @@ examples/index
 benchmarks/index
 ```
 
+## Change Log
+
+```{toctree}
+:maxdepth: 1
+
+changes
+```
+
 ## API
 
 ```{toctree}

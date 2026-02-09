@@ -13,7 +13,6 @@ requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 dependencies = [
     "warp-lang >= 1.10.0",
-    "torch>=2.8.0",
     "numpy",
 ]
 keywords = [
@@ -37,6 +36,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dynamic = ["version"]
+[project.optional-dependencies]
+
+torch = [
+    "torch>=2.8.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["nvalchemiops"]

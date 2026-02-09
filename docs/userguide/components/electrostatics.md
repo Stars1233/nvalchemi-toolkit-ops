@@ -12,8 +12,8 @@ via [NVIDIA Warp](https://nvidia.github.io/warp/), with full PyTorch autograd su
 for machine learning applications.
 
 ```{tip}
-For most applications, start with {func}`~nvalchemiops.interactions.electrostatics.ewald.ewald_summation`
-or {func}`~nvalchemiops.interactions.electrostatics.pme.particle_mesh_ewald`. These unified APIs
+For most applications, start with {func}`~nvalchemiops.torch.interactions.electrostatics.ewald_summation`
+or {func}`~nvalchemiops.torch.interactions.electrostatics.particle_mesh_ewald`. These unified APIs
 automatically handle parameter estimation and dispatch to optimized kernels based on your input.
 ```
 
@@ -44,11 +44,11 @@ All methods support:
 :sync: ewald
 
 ```python
-from nvalchemiops.interactions.electrostatics import ewald_summation
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.electrostatics import ewald_summation
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
@@ -58,8 +58,10 @@ energies, forces = ewald_summation(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=5e-4,  # Target accuracy for parameter estimation
+    compute_forces=True,
 )
 ```
 
@@ -69,11 +71,11 @@ energies, forces = ewald_summation(
 :sync: pme
 
 ```python
-from nvalchemiops.interactions.electrostatics import particle_mesh_ewald
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.electrostatics import particle_mesh_ewald
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
@@ -83,8 +85,10 @@ energies, forces = particle_mesh_ewald(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=5e-4,
+    compute_forces=True,
 )
 ```
 
@@ -94,11 +98,11 @@ energies, forces = particle_mesh_ewald(
 :sync: coulomb
 
 ```python
-from nvalchemiops.interactions.electrostatics.coulomb import coulomb_energy_forces
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.electrostatics import coulomb_energy_forces
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Build neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cell, pbc=pbc, return_neighbor_list=True
 )
 
@@ -110,6 +114,7 @@ energies, forces = coulomb_energy_forces(
     cutoff=10.0,
     alpha=0.0,  # Set to >0 for damped (Ewald real-space)
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
 )
 ```
@@ -204,7 +209,7 @@ E_{\text{background}} = \frac{\pi}{2\alpha^2 V} Q_{\text{total}}^2
 #### Explicit Parameters
 
 ```python
-from nvalchemiops.interactions.electrostatics import ewald_summation
+from nvalchemiops.torch.interactions.electrostatics import ewald_summation
 
 energies, forces = ewald_summation(
     positions=positions,
@@ -213,7 +218,9 @@ energies, forces = ewald_summation(
     alpha=0.3,        # Ewald splitting parameter
     k_cutoff=8.0,     # Reciprocal-space cutoff in inverse length
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 ```
 
@@ -227,8 +234,10 @@ energies, forces = ewald_summation(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=1e-6,  # Target relative error
+    compute_forces=True,
 )
 ```
 
@@ -245,7 +254,7 @@ k_{\text{cutoff}} = \sqrt{-2 \ln \varepsilon} / \eta
 ```
 
 ```{tip}
-Refer to the [Parameter Estimation](#parameter-estimation) section for API usage.
+Refer to the [Parameter Estimation](parameter-estimation) section for API usage.
 ```
 
 #### Separating real- and reciprocal-space
@@ -255,7 +264,7 @@ be used instead of the high level wrapper to compute the contributions
 directly:
 
 ```python
-from nvalchemiops.interactions.electrostatics import ewald_real_space, ewald_reciprocal_space
+from nvalchemiops.torch.interactions.electrostatics import ewald_real_space, ewald_reciprocal_space
 
 # Real-space only (short-range, damped Coulomb)
 real_energies, real_forces = ewald_real_space(
@@ -303,7 +312,7 @@ where $C(\mathbf{k})$ is the B-spline correction factor and $p$ is the spline or
 #### Basic Usage
 
 ```python
-from nvalchemiops.interactions.electrostatics import particle_mesh_ewald
+from nvalchemiops.torch.interactions.electrostatics import particle_mesh_ewald
 
 energies, forces = particle_mesh_ewald(
     positions=positions,
@@ -313,7 +322,9 @@ energies, forces = particle_mesh_ewald(
     mesh_dimensions=(32, 32, 32),  # FFT mesh size
     spline_order=4,                 # B-spline order (4 = cubic)
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 ```
 
@@ -329,7 +340,9 @@ energies, forces = particle_mesh_ewald(
     alpha=0.3,
     mesh_spacing=0.5,  # Angstrom (or your length unit)
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 ```
 
@@ -344,8 +357,10 @@ energies, forces = particle_mesh_ewald(
     charges=charges,
     cell=cell,
     neighbor_list=neighbor_list,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
     accuracy=4e-5,  # Estimates alpha and mesh dimensions
+    compute_forces=True,
 )
 ```
 
@@ -412,7 +427,7 @@ multipoles[:, 4:9] = quadrupoles    # Set quadrupole moments
 Explicit k-vector Ewald summation for multipoles:
 
 ```python
-from nvalchemiops.interactions.electrostatics import ewald_multipole_summation
+from nvalchemiops.torch.interactions.electrostatics import ewald_multipole_summation
 
 energies = ewald_multipole_summation(
     positions=positions,        # (N, 3)
@@ -427,8 +442,8 @@ energies = ewald_multipole_summation(
 For the reciprocal-space only (no real-space, useful for ML applications):
 
 ```python
-from nvalchemiops.interactions.electrostatics import ewald_multipole_reciprocal_space
-from nvalchemiops.interactions.electrostatics.k_vectors import generate_k_vectors_ewald_summation
+from nvalchemiops.torch.interactions.electrostatics import ewald_multipole_reciprocal_space
+from nvalchemiops.torch.interactions.electrostatics.k_vectors import generate_k_vectors_ewald_summation
 
 k_vectors = generate_k_vectors_ewald_summation(cell, k_cutoff=8.0)
 alpha = torch.tensor([0.5], dtype=torch.float64, device=cell.device)
@@ -449,7 +464,7 @@ energies, response = ewald_multipole_reciprocal_space(
 FFT-based multipole electrostatics with $O(N \log N)$ scaling:
 
 ```python
-from nvalchemiops.interactions.electrostatics import pme_multipole_summation
+from nvalchemiops.torch.interactions.electrostatics import pme_multipole_summation
 
 energies = pme_multipole_summation(
     positions=positions,
@@ -526,8 +541,8 @@ batching is the optimal way to amortize GPU utilization.
 The API for electrostatics only needs minor modification to support batches of
 systems: users must provide a `batch_idx` tensor to both the initial neighbor
 list computation as well as to either the
-{func}`~nvalchemiops.interactions.electrostatics.ewald.ewald_summation` and
-{func}`~nvalchemiops.interactions.electrostatics.pme.particle_mesh_ewald` methods.
+{func}`~nvalchemiops.torch.interactions.electrostatics.ewald_summation` and
+{func}`~nvalchemiops.torch.interactions.electrostatics.particle_mesh_ewald` methods.
 While $\alpha$ can be specified independently for each system within a batch, the
 mesh dimensions must be the same for all systems (although each system has its own mesh grid).
 
@@ -535,8 +550,8 @@ Example code to perform a batched Ewald calculation:
 
 ```python
 import torch
-from nvalchemiops.interactions.electrostatics import ewald_summation
-from nvalchemiops.neighborlist import neighbor_list
+from nvalchemiops.torch.interactions.electrostatics import ewald_summation
+from nvalchemiops.torch.neighbors import neighbor_list
 
 # Concatenate atoms from multiple systems
 positions = torch.cat([pos_system0, pos_system1, pos_system2])
@@ -554,7 +569,7 @@ cells = torch.stack([cell0, cell1, cell2])
 pbc = torch.tensor([[True, True, True]] * 3, device=positions.device)
 
 # Build batched neighbor list
-neighbor_list_coo, _, neighbor_shifts = neighbor_list(
+neighbor_list_coo, neighbor_ptr, neighbor_shifts = neighbor_list(
     positions, cutoff=10.0, cell=cells, pbc=pbc,
     batch_idx=batch_idx, method="batch_naive", return_neighbor_list=True
 )
@@ -571,7 +586,9 @@ energies, forces = ewald_summation(
     k_cutoff=8.0,
     batch_idx=batch_idx,
     neighbor_list=neighbor_list_coo,
+    neighbor_ptr=neighbor_ptr,
     neighbor_shifts=neighbor_shifts,
+    compute_forces=True,
 )
 
 # energies: (total_atoms,) - per-atom energies
@@ -599,7 +616,8 @@ of energy with respect to atomic positions (forces).
 positions.requires_grad_(True)
 energies, explicit_forces = ewald_summation(
     positions, charges, cell, alpha=0.3, k_cutoff=8.0,
-    neighbor_list=nl, neighbor_shifts=shifts,
+    neighbor_list=nl, neighbor_ptr=nl_ptr, neighbor_shifts=shifts,
+    compute_forces=True,
 )
 
 # Autograd forces should match explicit forces
@@ -624,8 +642,8 @@ energy with respect to atomic charges in the following way:
 charges.requires_grad_(True)
 energies = ewald_summation(
     positions, charges, cell, alpha=0.3, k_cutoff=8.0,
-    neighbor_list=nl, neighbor_shifts=shifts,
-    compute_forces=False,  # disable energy for performance
+    neighbor_list=nl, neighbor_ptr=nl_ptr, neighbor_shifts=shifts,
+    compute_forces=False,  # disable forces for performance
 )
 
 total_energy = energies.sum()
@@ -660,7 +678,7 @@ positions.requires_grad_(True)
 cell.requires_grad_(True)
 energies, forces = ewald_summation(
     positions, charges, cell, alpha=0.3, k_cutoff=8.0,
-    neighbor_list=nl, neighbor_shifts=shifts,
+    neighbor_list=nl, neighbor_ptr=nl_ptr, neighbor_shifts=shifts,
     compute_forces=True,
 )
 
@@ -680,12 +698,12 @@ but target the Ewald and PME algorithms respectively.
 
 ### Ewald Parameters
 
-The function {func}`~nvalchemiops.interactions.electrostatics.parameters.estimate_ewald_parameters`
+The function {func}`~nvalchemiops.torch.interactions.electrostatics.estimate_ewald_parameters`
 is used to estimate $\alpha$ and cutoffs for real- and reciprocal-space specifically
 for the **Ewald** algorithm:
 
 ```python
-from nvalchemiops.interactions.electrostatics import estimate_ewald_parameters
+from nvalchemiops.torch.interactions.electrostatics import estimate_ewald_parameters
 
 params = estimate_ewald_parameters(
     positions=positions,
@@ -699,17 +717,17 @@ print(f"r_cutoff = {params.real_space_cutoff.item():.4f}")
 print(f"k_cutoff = {params.reciprocal_space_cutoff.item():.4f}")
 ```
 
-This method returns {func}`~nvalchemiops.interactions.electrostatics.parameters.EwaldParameters`, which
+This method returns {func}`~nvalchemiops.torch.interactions.electrostatics.EwaldParameters`, which
 is a light data structure that holds parameters used for the Ewald algorithm.
 
 ### PME Parameters
 
-The function {func}`~nvalchemiops.interactions.electrostatics.parameters.estimate_pme_parameters`
+The function {func}`~nvalchemiops.torch.interactions.electrostatics.estimate_pme_parameters`
 is used to estimate $\alpha$, the real-space cutoff, and mesh specifications specifically
 for the PME algorithm; the value of $\alpha$ is determined the same way as for Ewald.
 
 ```python
-from nvalchemiops.interactions.electrostatics import estimate_pme_parameters
+from nvalchemiops.torch.interactions.electrostatics import estimate_pme_parameters
 
 params = estimate_pme_parameters(
     positions=positions,
@@ -723,7 +741,7 @@ print(f"Mesh: {params.mesh_dimensions}")
 print(f"r_cutoff = {params.real_space_cutoff.item():.4f}")
 ```
 
-This method returns {func}`~nvalchemiops.interactions.electrostatics.parameters.PMEParameters`, which
+This method returns {func}`~nvalchemiops.torch.interactions.electrostatics.PMEParameters`, which
 is a light data structure that holds parameters used for the particle-mesh Ewald algorithm.
 
 ## Units
@@ -826,7 +844,7 @@ comparing reciprocal-space energies:
 ```python
 import torch
 import math
-from nvalchemiops.interactions.electrostatics.pme import pme_reciprocal_space
+from nvalchemiops.torch.interactions.electrostatics import pme_reciprocal_space
 
 # Create a simple dipole system
 device = torch.device("cuda")
@@ -924,3 +942,7 @@ See the unit tests at `test/interactions/electrostatics/` in the repository.
 - Sagui, C.; Darden, T. A. (1999). "Molecular Dynamics Simulations of Biomolecules:
   Long-Range Electrostatic Effects." *Annu. Rev. Biophys. Biomol. Struct.* 28, 155-179.
   [DOI: 10.1146/annurev.biophys.28.1.155](https://doi.org/10.1146/annurev.biophys.28.1.155)
+
+---
+
+For detailed API documentation, see the [PyTorch API](../../modules/torch/electrostatics) and [Warp API](../../modules/warp/electrostatics) references.

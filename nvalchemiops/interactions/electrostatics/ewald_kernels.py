@@ -1,12 +1,17 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """
 Unified Ewald Summation Kernels
@@ -2487,6 +2492,1381 @@ def _batch_ewald_reciprocal_space_energy_forces_charge_grad_kernel(
     # Charge gradient
     # Self-energy and background corrections applied in higher-level code
     charge_gradients[atom_idx] = local_potential_uncharged
+
+
+###########################################################################################
+########################### Warp Launchers (Framework-Agnostic) ############################
+###########################################################################################
+
+
+def ewald_real_space_energy(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    unit_shifts: wp.array,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch Ewald real-space energy kernel using CSR neighbor list format.
+
+    This is a framework-agnostic launcher that accepts warp arrays directly.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (1,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrix.
+    idx_j : wp.array, shape (M,), dtype=wp.int32
+        Target atom indices (CSR data).
+    neighbor_ptr : wp.array, shape (N+1,), dtype=wp.int32
+        CSR row pointers.
+    unit_shifts : wp.array, shape (M,), dtype=wp.vec3i
+        Periodic image shifts.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    pair_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies. Must be pre-allocated and zeroed.
+    wp_dtype : type
+        Warp scalar type (wp.float32 or wp.float64).
+    device : str, optional
+        Warp device. If None, inferred from positions.
+    """
+    num_atoms = positions.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _ewald_real_space_energy_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            idx_j,
+            neighbor_ptr,
+            unit_shifts,
+            alpha,
+            pair_energies,
+        ],
+        device=device,
+    )
+
+
+def ewald_real_space_energy_forces(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    unit_shifts: wp.array,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch Ewald real-space energy and forces kernel using CSR neighbor list.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (1,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrix.
+    idx_j : wp.array, shape (M,), dtype=wp.int32
+        Target atom indices (CSR data).
+    neighbor_ptr : wp.array, shape (N+1,), dtype=wp.int32
+        CSR row pointers.
+    unit_shifts : wp.array, shape (M,), dtype=wp.vec3i
+        Periodic image shifts.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    pair_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    wp_dtype : type
+        Warp scalar type (wp.float32 or wp.float64).
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = positions.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _ewald_real_space_energy_forces_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            idx_j,
+            neighbor_ptr,
+            unit_shifts,
+            alpha,
+            pair_energies,
+            atomic_forces,
+        ],
+        device=device,
+    )
+
+
+def ewald_real_space_energy_matrix(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    neighbor_matrix: wp.array,
+    unit_shifts_matrix: wp.array,
+    mask_value: int,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch Ewald real-space energy kernel using neighbor matrix format.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (1,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrix.
+    neighbor_matrix : wp.array2d, shape (N, max_neighbors), dtype=wp.int32
+        Neighbor indices.
+    unit_shifts_matrix : wp.array2d, shape (N, max_neighbors), dtype=wp.vec3i
+        Periodic image shifts.
+    mask_value : int
+        Value indicating invalid/padded entries.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    pair_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    wp_dtype : type
+        Warp scalar type (wp.float32 or wp.float64).
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = neighbor_matrix.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _ewald_real_space_energy_neighbor_matrix_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            neighbor_matrix,
+            unit_shifts_matrix,
+            wp.int32(mask_value),
+            alpha,
+            pair_energies,
+        ],
+        device=device,
+    )
+
+
+def ewald_real_space_energy_forces_matrix(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    neighbor_matrix: wp.array,
+    unit_shifts_matrix: wp.array,
+    mask_value: int,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch Ewald real-space energy and forces kernel using neighbor matrix.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (1,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrix.
+    neighbor_matrix : wp.array2d, shape (N, max_neighbors), dtype=wp.int32
+        Neighbor indices.
+    unit_shifts_matrix : wp.array2d, shape (N, max_neighbors), dtype=wp.vec3i
+        Periodic image shifts.
+    mask_value : int
+        Value indicating invalid/padded entries.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    pair_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    wp_dtype : type
+        Warp scalar type (wp.float32 or wp.float64).
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = neighbor_matrix.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _ewald_real_space_energy_forces_neighbor_matrix_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            neighbor_matrix,
+            unit_shifts_matrix,
+            wp.int32(mask_value),
+            alpha,
+            pair_energies,
+            atomic_forces,
+        ],
+        device=device,
+    )
+
+
+def ewald_real_space_energy_forces_charge_grad(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    unit_shifts: wp.array,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch Ewald real-space energy, forces, and charge gradients kernel (CSR).
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (1,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrix.
+    idx_j : wp.array, shape (M,), dtype=wp.int32
+        Target atom indices (CSR data).
+    neighbor_ptr : wp.array, shape (N+1,), dtype=wp.int32
+        CSR row pointers.
+    unit_shifts : wp.array, shape (M,), dtype=wp.vec3i
+        Periodic image shifts.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    pair_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    charge_gradients : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom charge gradients.
+    wp_dtype : type
+        Warp scalar type (wp.float32 or wp.float64).
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = positions.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _ewald_real_space_energy_forces_charge_grad_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            idx_j,
+            neighbor_ptr,
+            unit_shifts,
+            alpha,
+            pair_energies,
+            atomic_forces,
+            charge_gradients,
+        ],
+        device=device,
+    )
+
+
+def ewald_real_space_energy_forces_charge_grad_matrix(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    neighbor_matrix: wp.array,
+    unit_shifts_matrix: wp.array,
+    mask_value: int,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch Ewald real-space energy, forces, and charge gradients kernel (matrix).
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (1,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrix.
+    neighbor_matrix : wp.array2d, shape (N, max_neighbors), dtype=wp.int32
+        Neighbor indices.
+    unit_shifts_matrix : wp.array2d, shape (N, max_neighbors), dtype=wp.vec3i
+        Periodic image shifts.
+    mask_value : int
+        Value indicating invalid/padded entries.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    pair_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    charge_gradients : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom charge gradients.
+    wp_dtype : type
+        Warp scalar type (wp.float32 or wp.float64).
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = neighbor_matrix.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _ewald_real_space_energy_forces_charge_grad_neighbor_matrix_kernel_overload[
+            wp_dtype
+        ],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            neighbor_matrix,
+            unit_shifts_matrix,
+            wp.int32(mask_value),
+            alpha,
+            pair_energies,
+            atomic_forces,
+            charge_gradients,
+        ],
+        device=device,
+    )
+
+
+# ==================== Batch Real-Space Launchers ====================
+
+
+def batch_ewald_real_space_energy(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    batch_id: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    unit_shifts: wp.array,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched Ewald real-space energy kernel using CSR neighbor list.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions (all systems concatenated).
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (B,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrices for each system.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    idx_j : wp.array, shape (M,), dtype=wp.int32
+        Target atom indices (CSR data).
+    neighbor_ptr : wp.array, shape (N_total+1,), dtype=wp.int32
+        CSR row pointers.
+    unit_shifts : wp.array, shape (M,), dtype=wp.vec3i
+        Periodic image shifts.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    pair_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    wp_dtype : type
+        Warp scalar type (wp.float32 or wp.float64).
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = positions.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _batch_ewald_real_space_energy_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            batch_id,
+            idx_j,
+            neighbor_ptr,
+            unit_shifts,
+            alpha,
+            pair_energies,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_real_space_energy_forces(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    batch_id: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    unit_shifts: wp.array,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched Ewald real-space energy and forces kernel (CSR).
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (B,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrices.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    idx_j : wp.array, shape (M,), dtype=wp.int32
+        Target atom indices.
+    neighbor_ptr : wp.array, shape (N_total+1,), dtype=wp.int32
+        CSR row pointers.
+    unit_shifts : wp.array, shape (M,), dtype=wp.vec3i
+        Periodic image shifts.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    pair_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = positions.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _batch_ewald_real_space_energy_forces_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            batch_id,
+            idx_j,
+            neighbor_ptr,
+            unit_shifts,
+            alpha,
+            pair_energies,
+            atomic_forces,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_real_space_energy_matrix(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    batch_id: wp.array,
+    neighbor_matrix: wp.array,
+    unit_shifts_matrix: wp.array,
+    mask_value: int,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched Ewald real-space energy kernel using neighbor matrix.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (B,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrices.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    neighbor_matrix : wp.array2d, shape (N_total, max_neighbors), dtype=wp.int32
+        Neighbor indices.
+    unit_shifts_matrix : wp.array2d, shape (N_total, max_neighbors), dtype=wp.vec3i
+        Periodic image shifts.
+    mask_value : int
+        Value indicating invalid entries.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    pair_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = neighbor_matrix.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _batch_ewald_real_space_energy_neighbor_matrix_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            batch_id,
+            neighbor_matrix,
+            unit_shifts_matrix,
+            wp.int32(mask_value),
+            alpha,
+            pair_energies,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_real_space_energy_forces_matrix(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    batch_id: wp.array,
+    neighbor_matrix: wp.array,
+    unit_shifts_matrix: wp.array,
+    mask_value: int,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched Ewald real-space energy and forces kernel (matrix).
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (B,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrices.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    neighbor_matrix : wp.array2d, shape (N_total, max_neighbors), dtype=wp.int32
+        Neighbor indices.
+    unit_shifts_matrix : wp.array2d, shape (N_total, max_neighbors), dtype=wp.vec3i
+        Periodic image shifts.
+    mask_value : int
+        Value indicating invalid entries.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    pair_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = neighbor_matrix.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _batch_ewald_real_space_energy_forces_neighbor_matrix_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            batch_id,
+            neighbor_matrix,
+            unit_shifts_matrix,
+            wp.int32(mask_value),
+            alpha,
+            pair_energies,
+            atomic_forces,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_real_space_energy_forces_charge_grad(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    batch_id: wp.array,
+    idx_j: wp.array,
+    neighbor_ptr: wp.array,
+    unit_shifts: wp.array,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched Ewald real-space energy, forces, charge gradients kernel (CSR).
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (B,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrices.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    idx_j : wp.array, shape (M,), dtype=wp.int32
+        Target atom indices.
+    neighbor_ptr : wp.array, shape (N_total+1,), dtype=wp.int32
+        CSR row pointers.
+    unit_shifts : wp.array, shape (M,), dtype=wp.vec3i
+        Periodic image shifts.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    pair_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    charge_gradients : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom charge gradients.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = positions.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _batch_ewald_real_space_energy_forces_charge_grad_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            batch_id,
+            idx_j,
+            neighbor_ptr,
+            unit_shifts,
+            alpha,
+            pair_energies,
+            atomic_forces,
+            charge_gradients,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_real_space_energy_forces_charge_grad_matrix(
+    positions: wp.array,
+    charges: wp.array,
+    cell: wp.array,
+    batch_id: wp.array,
+    neighbor_matrix: wp.array,
+    unit_shifts_matrix: wp.array,
+    mask_value: int,
+    alpha: wp.array,
+    pair_energies: wp.array,
+    atomic_forces: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched Ewald real-space energy, forces, charge gradients kernel (matrix).
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cell : wp.array, shape (B,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrices.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    neighbor_matrix : wp.array2d, shape (N_total, max_neighbors), dtype=wp.int32
+        Neighbor indices.
+    unit_shifts_matrix : wp.array2d, shape (N_total, max_neighbors), dtype=wp.vec3i
+        Periodic image shifts.
+    mask_value : int
+        Value indicating invalid entries.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    pair_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    charge_gradients : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom charge gradients.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = neighbor_matrix.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _batch_ewald_real_space_energy_forces_charge_grad_neighbor_matrix_kernel_overload[
+            wp_dtype
+        ],
+        dim=num_atoms,
+        inputs=[
+            positions,
+            charges,
+            cell,
+            batch_id,
+            neighbor_matrix,
+            unit_shifts_matrix,
+            wp.int32(mask_value),
+            alpha,
+            pair_energies,
+            atomic_forces,
+            charge_gradients,
+        ],
+        device=device,
+    )
+
+
+# ==================== Reciprocal-Space Launchers ====================
+
+
+def ewald_reciprocal_space_fill_structure_factors(
+    positions: wp.array,
+    charges: wp.array,
+    k_vectors: wp.array,
+    cell: wp.array,
+    alpha: wp.array,
+    total_charge: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch kernel to compute structure factors for reciprocal-space Ewald.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    k_vectors : wp.array, shape (K,), dtype=wp.vec3f or wp.vec3d
+        Half-space reciprocal lattice vectors.
+    cell : wp.array, shape (1,), dtype=wp.mat33f or wp.mat33d
+        Unit cell matrix.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    total_charge : wp.array, shape (1,), dtype=wp.float64
+        OUTPUT: Q_total/V for background correction.
+    cos_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        OUTPUT: cos(k.r) for each (k, atom) pair.
+    sin_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        OUTPUT: sin(k.r) for each (k, atom) pair.
+    real_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        OUTPUT: Real part of weighted structure factors.
+    imag_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        OUTPUT: Imaginary part of weighted structure factors.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_k = k_vectors.shape[0]
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _ewald_reciprocal_space_energy_kernel_fill_structure_factors_overload[wp_dtype],
+        dim=num_k,
+        inputs=[
+            positions,
+            charges,
+            k_vectors,
+            cell,
+            alpha,
+            total_charge,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+        ],
+        device=device,
+    )
+
+
+def ewald_reciprocal_space_compute_energy(
+    charges: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    reciprocal_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch kernel to compute per-atom reciprocal-space energies.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    cos_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        cos(k.r) from structure factor computation.
+    sin_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        sin(k.r) from structure factor computation.
+    real_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        Real structure factors.
+    imag_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        Imaginary structure factors.
+    reciprocal_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _ewald_reciprocal_space_energy_kernel_compute_energy_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            charges,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+            reciprocal_energies,
+        ],
+        device=device,
+    )
+
+
+def ewald_subtract_self_energy(
+    charges: wp.array,
+    alpha: wp.array,
+    total_charge: wp.array,
+    energy_in: wp.array,
+    energy_out: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch kernel to apply self-energy and background corrections.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    alpha : wp.array, shape (1,), dtype=wp.float32 or wp.float64
+        Ewald splitting parameter.
+    total_charge : wp.array, shape (1,), dtype=wp.float64
+        Q_total/V from structure factor computation.
+    energy_in : wp.array, shape (N,), dtype=wp.float64
+        Raw reciprocal-space energies.
+    energy_out : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Corrected energies.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _ewald_subtract_self_energy_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[charges, alpha, total_charge, energy_in, energy_out],
+        device=device,
+    )
+
+
+def ewald_reciprocal_space_energy_forces(
+    charges: wp.array,
+    k_vectors: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    reciprocal_energies: wp.array,
+    atomic_forces: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch kernel to compute reciprocal-space energies and forces.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    k_vectors : wp.array, shape (K,), dtype=wp.vec3f or wp.vec3d
+        Reciprocal lattice vectors.
+    cos_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        cos(k.r) from structure factor computation.
+    sin_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        sin(k.r) from structure factor computation.
+    real_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        Real structure factors.
+    imag_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        Imaginary structure factors.
+    reciprocal_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _ewald_reciprocal_space_energy_forces_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            charges,
+            k_vectors,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+            reciprocal_energies,
+            atomic_forces,
+        ],
+        device=device,
+    )
+
+
+def ewald_reciprocal_space_energy_forces_charge_grad(
+    charges: wp.array,
+    k_vectors: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    reciprocal_energies: wp.array,
+    atomic_forces: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch kernel to compute reciprocal-space energies, forces, and charge gradients.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    k_vectors : wp.array, shape (K,), dtype=wp.vec3f or wp.vec3d
+        Reciprocal lattice vectors.
+    cos_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        cos(k.r) from structure factor computation.
+    sin_k_dot_r : wp.array2d, shape (K, N), dtype=wp.float64
+        sin(k.r) from structure factor computation.
+    real_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        Real structure factors.
+    imag_structure_factors : wp.array, shape (K,), dtype=wp.float64
+        Imaginary structure factors.
+    reciprocal_energies : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    charge_gradients : wp.array, shape (N,), dtype=wp.float64
+        OUTPUT: Per-atom charge gradients.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _ewald_reciprocal_space_energy_forces_charge_grad_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            charges,
+            k_vectors,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+            reciprocal_energies,
+            atomic_forces,
+            charge_gradients,
+        ],
+        device=device,
+    )
+
+
+# ==================== Batch Reciprocal-Space Launchers ====================
+
+
+def batch_ewald_reciprocal_space_fill_structure_factors(
+    positions: wp.array,
+    charges: wp.array,
+    k_vectors: wp.array,
+    cell: wp.array,
+    alpha: wp.array,
+    atom_start: wp.array,
+    atom_end: wp.array,
+    total_charges: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    num_k: int,
+    num_systems: int,
+    max_blocks_per_system: int,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched kernel to compute structure factors for reciprocal-space Ewald.
+
+    Parameters
+    ----------
+    positions : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        Atomic positions.
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    k_vectors : wp.array2d, shape (B, K), dtype=wp.vec3f or wp.vec3d
+        Per-system reciprocal lattice vectors.
+    cell : wp.array, shape (B,), dtype=wp.mat33f or wp.mat33d
+        Per-system unit cell matrices.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    atom_start : wp.array, shape (B,), dtype=wp.int32
+        First atom index for each system.
+    atom_end : wp.array, shape (B,), dtype=wp.int32
+        Last atom index (exclusive) for each system.
+    total_charges : wp.array, shape (B,), dtype=wp.float64
+        OUTPUT: Per-system Q_total/V.
+    cos_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        OUTPUT: cos(k.r) for each (k, atom) pair.
+    sin_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        OUTPUT: sin(k.r) for each (k, atom) pair.
+    real_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        OUTPUT: Per-system real structure factors.
+    imag_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        OUTPUT: Per-system imaginary structure factors.
+    num_k : int
+        Number of k-vectors per system.
+    num_systems : int
+        Number of systems in the batch.
+    max_blocks_per_system : int
+        Maximum atom blocks per system.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    if device is None:
+        device = str(positions.device)
+
+    wp.launch(
+        _batch_ewald_reciprocal_space_energy_kernel_fill_structure_factors_overload[
+            wp_dtype
+        ],
+        dim=(num_k, num_systems, max_blocks_per_system),
+        inputs=[
+            positions,
+            charges,
+            k_vectors,
+            cell,
+            alpha,
+            atom_start,
+            atom_end,
+            total_charges,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_reciprocal_space_compute_energy(
+    charges: wp.array,
+    batch_id: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    reciprocal_energies: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched kernel to compute per-atom reciprocal-space energies.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    cos_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        cos(k.r) from structure factor computation.
+    sin_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        sin(k.r) from structure factor computation.
+    real_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        Per-system real structure factors.
+    imag_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        Per-system imaginary structure factors.
+    reciprocal_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _batch_ewald_reciprocal_space_energy_kernel_compute_energy_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            charges,
+            batch_id,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+            reciprocal_energies,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_subtract_self_energy(
+    charges: wp.array,
+    batch_idx: wp.array,
+    alpha: wp.array,
+    total_charges: wp.array,
+    energy_in: wp.array,
+    energy_out: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched kernel to apply self-energy and background corrections.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    batch_idx : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    alpha : wp.array, shape (B,), dtype=wp.float32 or wp.float64
+        Per-system Ewald splitting parameter.
+    total_charges : wp.array, shape (B,), dtype=wp.float64
+        Per-system Q_total/V.
+    energy_in : wp.array, shape (N_total,), dtype=wp.float64
+        Raw reciprocal-space energies.
+    energy_out : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Corrected energies.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _batch_ewald_subtract_self_energy_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[charges, batch_idx, alpha, total_charges, energy_in, energy_out],
+        device=device,
+    )
+
+
+def batch_ewald_reciprocal_space_energy_forces(
+    charges: wp.array,
+    batch_id: wp.array,
+    k_vectors: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    reciprocal_energies: wp.array,
+    atomic_forces: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched kernel to compute reciprocal-space energies and forces.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    k_vectors : wp.array2d, shape (B, K), dtype=wp.vec3f or wp.vec3d
+        Per-system reciprocal lattice vectors.
+    cos_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        cos(k.r) from structure factor computation.
+    sin_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        sin(k.r) from structure factor computation.
+    real_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        Per-system real structure factors.
+    imag_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        Per-system imaginary structure factors.
+    reciprocal_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _batch_ewald_reciprocal_space_energy_forces_kernel_overload[wp_dtype],
+        dim=num_atoms,
+        inputs=[
+            charges,
+            batch_id,
+            k_vectors,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+            reciprocal_energies,
+            atomic_forces,
+        ],
+        device=device,
+    )
+
+
+def batch_ewald_reciprocal_space_energy_forces_charge_grad(
+    charges: wp.array,
+    batch_id: wp.array,
+    k_vectors: wp.array,
+    cos_k_dot_r: wp.array,
+    sin_k_dot_r: wp.array,
+    real_structure_factors: wp.array,
+    imag_structure_factors: wp.array,
+    reciprocal_energies: wp.array,
+    atomic_forces: wp.array,
+    charge_gradients: wp.array,
+    wp_dtype: type,
+    device: str | None = None,
+) -> None:
+    """Launch batched kernel for reciprocal-space energies, forces, charge gradients.
+
+    Parameters
+    ----------
+    charges : wp.array, shape (N_total,), dtype=wp.float32 or wp.float64
+        Atomic charges.
+    batch_id : wp.array, shape (N_total,), dtype=wp.int32
+        System index for each atom.
+    k_vectors : wp.array2d, shape (B, K), dtype=wp.vec3f or wp.vec3d
+        Per-system reciprocal lattice vectors.
+    cos_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        cos(k.r) from structure factor computation.
+    sin_k_dot_r : wp.array2d, shape (K, N_total), dtype=wp.float64
+        sin(k.r) from structure factor computation.
+    real_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        Per-system real structure factors.
+    imag_structure_factors : wp.array2d, shape (B, K), dtype=wp.float64
+        Per-system imaginary structure factors.
+    reciprocal_energies : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom energies.
+    atomic_forces : wp.array, shape (N_total,), dtype=wp.vec3f or wp.vec3d
+        OUTPUT: Per-atom forces.
+    charge_gradients : wp.array, shape (N_total,), dtype=wp.float64
+        OUTPUT: Per-atom charge gradients.
+    wp_dtype : type
+        Warp scalar type.
+    device : str, optional
+        Warp device.
+    """
+    num_atoms = charges.shape[0]
+    if device is None:
+        device = str(charges.device)
+
+    wp.launch(
+        _batch_ewald_reciprocal_space_energy_forces_charge_grad_kernel_overload[
+            wp_dtype
+        ],
+        dim=num_atoms,
+        inputs=[
+            charges,
+            batch_id,
+            k_vectors,
+            cos_k_dot_r,
+            sin_k_dot_r,
+            real_structure_factors,
+            imag_structure_factors,
+            reciprocal_energies,
+            atomic_forces,
+            charge_gradients,
+        ],
+        device=device,
+    )
 
 
 ###########################################################################################
