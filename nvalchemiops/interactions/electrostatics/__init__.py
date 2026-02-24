@@ -44,6 +44,13 @@ Available Methods
    - Uses B-spline interpolation for charge assignment
    - Full autograd support
 
+4. **Damped Shifted Force (DSF)** (`dsf`)
+   - Pairwise :math:`O(N)` electrostatic summation
+   - Both potential and forces smoothly vanish at cutoff
+   - Supports geometry-dependent charges (MLIP)
+   - Warp launchers: ``dsf_csr()``, ``dsf_matrix()``
+   - PyTorch API: ``nvalchemiops.torch.interactions.electrostatics.dsf``
+
 """
 
 # Coulomb - Warp launchers (framework-agnostic)
@@ -101,7 +108,16 @@ from nvalchemiops.interactions.electrostatics.pme_kernels import (
     pme_green_structure_factor,
 )
 
+# DSF - Warp launchers (framework-agnostic)
+from .dsf import (
+    dsf_csr,
+    dsf_matrix,
+)
+
 __all__ = [
+    # DSF - Warp launchers
+    "dsf_csr",
+    "dsf_matrix",
     # Coulomb - Warp launchers
     "coulomb_energy",
     "coulomb_energy_forces",
@@ -149,9 +165,6 @@ __all__ = [
     # PME - PyTorch bindings (deprecated, use nvalchemiops.torch.interactions.electrostatics)
     "particle_mesh_ewald",
     "pme_reciprocal_space",
-    "pme_green_structure_factor",
-    "pme_energy_corrections",
-    "pme_energy_corrections_with_charge_grad",
 ]
 
 # Deprecated PyTorch functions - lazy import with warning

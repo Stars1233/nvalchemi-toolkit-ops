@@ -10,82 +10,82 @@ parameters:
 
 # System configurations to test
 systems:
-  # Single large systems - scaling study
+  # Single large systems - scaling study (up to ~200k atoms)
   - name: cscl_single
     system_type: cscl
     mode: single
-    supercell_sizes: [1, 3, 5, 7, 10, 15, 20, 25, 30, 35] # Linear dimensions (2*size³ atoms)
+    supercell_sizes: [1, 3, 5, 7, 10, 15, 20, 25, 30, 35, 40, 46] # Linear dimensions (2*size³ atoms)
 
-  # Batched systems - throughput study
-  # Multiple configurations to see scaling with atoms per system
+  # Batched systems - throughput study (up to ~200k total atoms)
 
   # Very small systems (16 atoms each) - high batch counts
   - name: cscl_batched_size2
     system_type: cscl
     mode: batched
-    base_supercell_size: 2 # 2*2³ = 16 atoms per system
+    base_supercell_size: 2 # 2*2^3 = 16 atoms per system
     batch_sizes: [1, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 4096, 8192]
 
   # Small systems (54 atoms each)
   - name: cscl_batched_size3
     system_type: cscl
     mode: batched
-    base_supercell_size: 3 # 2*3³ = 54 atoms per system
+    base_supercell_size: 3 # 2*3^3 = 54 atoms per system
     batch_sizes: [1, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 4096, 8192]
 
   # Medium-small systems (128 atoms each)
   - name: cscl_batched_size4
     system_type: cscl
     mode: batched
-    base_supercell_size: 4 # 2*4³ = 128 atoms per system
+    base_supercell_size: 4 # 2*4^3 = 128 atoms per system
     batch_sizes: [1, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 4096]
 
   # Medium systems (250 atoms each)
   - name: cscl_batched_size5
     system_type: cscl
     mode: batched
-    base_supercell_size: 5 # 2*5³ = 250 atoms per system
+    base_supercell_size: 5 # 2*5^3 = 250 atoms per system
     batch_sizes: [1, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 
   # Medium-large systems (432 atoms each)
   - name: cscl_batched_size6
     system_type: cscl
     mode: batched
-    base_supercell_size: 6 # 2*6³ = 432 atoms per system
+    base_supercell_size: 6 # 2*6^3 = 432 atoms per system
     batch_sizes: [1, 4, 8, 16, 32, 64, 128, 256, 512]
 
   # Large systems (1024 atoms each)
   - name: cscl_batched_size8
     system_type: cscl
     mode: batched
-    base_supercell_size: 8 # 2*8³ = 1024 atoms per system
+    base_supercell_size: 8 # 2*8^3 = 1024 atoms per system
     batch_sizes: [1, 4, 8, 16, 32, 64, 128]
 
   # Very large systems (2000 atoms each)
   - name: cscl_batched_size10
     system_type: cscl
     mode: batched
-    base_supercell_size: 10 # 2*10³ = 2000 atoms per system
+    base_supercell_size: 10 # 2*10^3 = 2000 atoms per system
     batch_sizes: [1, 4, 8, 16, 32, 64]
 
   # Very Very Large systems (16,000 atoms each)
   - name: cscl_batched_size20
     system_type: cscl
     mode: batched
-    base_supercell_size: 20 # 2*20³ = 16,000 atoms per system
+    base_supercell_size: 20 # 2*20^3 = 16,000 atoms per system
     batch_sizes: [1, 4]
 
 # Methods to benchmark
 methods:
   - ewald
   - pme
+  - dsf
 
-# Components to benchmark
+# Components to benchmark (DSF always uses "full" regardless of this setting)
 components:
-  # - full
-  # - real
+  - full
+  - real
   - reciprocal
 
 # Whether to compute forces and virial
-compute_forces: false
-compute_virial: false
+compute_forces: true
+compute_virial: true

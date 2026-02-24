@@ -1,9 +1,9 @@
 # Electrostatics Benchmarks
 
 This page presents benchmark results for electrostatic interaction methods including
-Ewald summation and Particle Mesh Ewald (PME) across different GPU hardware. Results
-show the scaling behavior with increasing system size for periodic systems, including
-both single-system and batched computations.
+Ewald summation, Particle Mesh Ewald (PME), and Damped Shifted Force (DSF) across
+different GPU hardware. Results show the scaling behavior with increasing system size
+for both single-system and batched computations.
 
 ```{warning}
 These results are intended to be indicative _only_: your actual performance may
@@ -268,6 +268,29 @@ Peak GPU memory consumption for single and batched systems.
 
 ::::
 
+## Damped Shifted Force (DSF)
+
+The DSF method is a purely real-space, pairwise $O(N)$ electrostatic summation.
+Unlike Ewald and PME, DSF has no reciprocal-space component -- benchmarks measure
+the full calculation directly. DSF supports both CSR neighbor list and dense
+neighbor matrix formats, and can be compared against a pure PyTorch reference
+implementation (`torch_dsf` backend).
+
+```{note}
+DSF benchmark plots will be added in a future update. Performance and accuracy
+benchmark scripts are available in
+`benchmarks/interactions/electrostatics/` and can be run on your hardware
+using the instructions below.
+```
+
+### DSF Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| `cutoff` | 12.0 |
+| `alpha` | 0.2 |
+| `component` | `full` (real-space only, no reciprocal-space split) |
+
 ## Hardware Information
 
 **GPU**: NVIDIA H100 80GB HBM3
@@ -304,10 +327,10 @@ targeting $10^{-6}$ relative accuracy:
 : Number of systems processed simultaneously (1 for single-system mode).
 
 `method`
-: The electrostatics method used (`ewald` or `pme`).
+: The electrostatics method used (`ewald`, `pme`, or `dsf`).
 
 `backend`
-: The computational backend (`torch`, `jax`, or `torchpme`).
+: The computational backend (`torch`, `jax`, `torchpme`, or `torch_dsf`).
 
 `component`
 : Which part of the calculation was benchmarked (`real`, `reciprocal`, or `full`).
@@ -337,7 +360,7 @@ cd benchmarks/interactions/electrostatics
 python benchmark_electrostatics.py \
     --config benchmark_config.yaml \
     --backend torch \
-    --method both \
+    --method all \
     --output-dir ../../../docs/benchmarks/benchmark_results
 ```
 
@@ -365,17 +388,35 @@ python benchmark_electrostatics.py \
 
 ### Options
 
-`--backend {torch,jax,torchpme}`
-: Select backend (default: `torch`).
+`--backend {torch,jax,torchpme,torch_dsf,both}`
+: Computational backend (default: `torch`). `both` dispatches per-method:
+  `torch` + `torchpme` for Ewald/PME, `torch` + `torch_dsf` for DSF.
 
-`--method {ewald,pme,both}`
-: Select electrostatics method (default: `both`).
+`--method {ewald,pme,dsf,both,all}`
+: Electrostatics method (default: `both`). `both` = Ewald + PME (backward
+  compatible). `all` = Ewald + PME + DSF.
+
+`--neighbor-format {list,matrix,both}`
+: Neighbor format for DSF benchmarks (default: `list`). Ewald/PME always use matrix.
+
+`--dtype {float32,float64}`
+: Override dtype from config file.
 
 `--gpu-sku <name>`
 : Override GPU SKU name for output files (default: auto-detect).
 
 `--config <path>`
 : Path to YAML configuration file.
+
+#### DSF-Only Benchmark
+
+```bash
+python benchmark_electrostatics.py \
+    --config benchmark_config.yaml \
+    --backend both \
+    --method dsf \
+    --neighbor-format list
+```
 
 Results will be saved as CSV files and plots will be automatically generated
 during the next documentation build.
