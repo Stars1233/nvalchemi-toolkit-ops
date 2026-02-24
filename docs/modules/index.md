@@ -12,6 +12,7 @@ alone may not provide sufficient information.
 torch/neighbors.rst
 torch/dispersion.rst
 torch/electrostatics.rst
+torch/dynamics.rst
 ```
 
 ## Warp Reference
@@ -22,5 +23,6 @@ torch/electrostatics.rst
 warp/neighbors.rst
 warp/dispersion.rst
 warp/electrostatics.rst
+warp/dynamics.rst
 utilities.rst
 ```

@@ -63,6 +63,7 @@ print(f"Average neighbors per atom: {num_neighbors.float().mean():.1f}")
 - [NeighborLists](components/neighborlist)
 - [Electrostatics](components/electrostatics)
 - [Dispersion Corrections](components/dispersion)
+- [Dynamics](components/dynamics)
 
 ## Advanced Usage
 
@@ -86,6 +87,7 @@ about/faq
 components/neighborlist
 components/electrostatics
 components/dispersion
+components/dynamics
 ```
 
 ```{toctree}
