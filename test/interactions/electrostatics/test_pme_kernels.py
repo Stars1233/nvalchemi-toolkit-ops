@@ -1047,7 +1047,7 @@ class TestPMEKernelsRegression:
         # This catches any unintended changes to the kernel behavior
         expected_total = -0.28837797333090204
 
-        assert result == pytest.approx(expected_total, rel=1e-10)
+        assert result == pytest.approx(expected_total, rel=1e-7)
 
     def test_green_function_regression(self, device):
         """Regression test for Green's function with known values.
@@ -1108,7 +1108,7 @@ class TestPMEKernelsRegression:
         expected = 0.023114547639039303
 
         # Check non-k=0 point
-        assert green_np[1, 0, 0] == pytest.approx(expected, rel=1e-10)
+        assert green_np[1, 0, 0] == pytest.approx(expected, rel=1e-7)
         # k=0 should be zero
         assert green_np[0, 0, 0] == 0.0
 

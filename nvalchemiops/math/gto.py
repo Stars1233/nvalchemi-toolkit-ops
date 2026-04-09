@@ -128,7 +128,9 @@ from nvalchemiops.math.spherical_harmonics import (
 # pi and related constants
 PI = wp.constant(wp.float64(math.pi))
 TWOPI = wp.constant(wp.float64(2.0 * math.pi))
+SQRT_PI = wp.constant(wp.float64(math.sqrt(math.pi)))  # sqrt(pi)
 SQRT_4PI = wp.constant(wp.float64(math.sqrt(4.0 * math.pi)))  # sqrt(4*pi)
+TWOPI_3_2 = wp.constant(wp.float64((2.0 * math.pi) ** 1.5))  # (2*pi)^(3/2)
 
 # Small value for numerical stability
 EPSILON = wp.constant(wp.float64(1e-30))
@@ -170,9 +172,7 @@ def gto_normalization(sigma: wp.float64) -> wp.float64:
     """
     sigma2 = sigma * sigma
     sigma3 = sigma2 * sigma
-    # (2*pi)^(3/2) = (2*pi) * sqrt(2*pi) ~= 15.7496...
-    twopi_3_2 = TWOPI * wp.sqrt(TWOPI)
-    return SQRT_4PI / (twopi_3_2 * sigma3)
+    return SQRT_4PI / (TWOPI_3_2 * sigma3)
 
 
 @wp.func
@@ -523,8 +523,7 @@ def gto_self_overlap(L: int, sigma: wp.float64) -> wp.float64:
     #           = 1 / (2*pi^(1/2) * sigma^3)
     #           = 1 / (2*sqrt(pi) * sigma^3)
 
-    sqrt_pi = wp.sqrt(PI)
-    return wp.float64(1.0) / (wp.float64(2.0) * sqrt_pi * sigma3)
+    return wp.float64(1.0) / (wp.float64(2.0) * SQRT_PI * sigma3)
 
 
 # =============================================================================

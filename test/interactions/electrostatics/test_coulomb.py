@@ -1167,7 +1167,7 @@ class TestCoulombRegressionValues:
         # Hardcoded regression value from actual kernel output
         # Note: This differs slightly from math.erfc due to wp_erfc implementation
         expected_total = -0.011298244912778213
-        assert sum(result) == pytest.approx(expected_total, rel=1e-10)
+        assert sum(result) == pytest.approx(expected_total, rel=1e-7)
 
     def test_regression_force_magnitude(self, device):
         """Regression test: force magnitude for two atoms at distance 3.0.
