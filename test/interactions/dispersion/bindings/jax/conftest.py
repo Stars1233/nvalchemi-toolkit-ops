@@ -13,15 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = "0.3.1"
+"""Tests for JAX DFT-D3 dispersion bindings."""
 
-import warp as wp
+from __future__ import annotations
 
-wp.config.quiet = True
-try:
-    wp.init()
-except RuntimeError as e:
-    raise RuntimeError(
-        "Failed to initialize warp, likely due to missing drivers and/or devices."
-        " Make sure you have the correct CUDA version, and that GPUs are available."
-    ) from e
+import pytest
+
+pytest.importorskip("jax", reason="No JAX installed.")
